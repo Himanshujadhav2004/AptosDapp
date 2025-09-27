@@ -1,3 +1,6 @@
 export { Navbar } from './Navbar';
 export { WalletModal } from './WalletModal';
-export { TokenTransfer } from './TokenTransfer';
+export { CreateCompany } from './CreateCompany';
+export { EmployeeManagement } from './EmployeeManagement';
+export { PayrollManagement } from './PayrollManagement';
+export { AnalysisDashboard } from './AnalysisDashboard';
