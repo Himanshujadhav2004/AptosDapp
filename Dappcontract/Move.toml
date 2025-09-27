@@ -1,0 +1,17 @@
+[package]
+name = "dappcontract"
+version = "1.0.0"
+authors = []
+
+[addresses]
+Dappcontract = "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
+
+[dev-addresses]
+Dappcontract = "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "mainnet"
+subdir = "aptos-framework"
+
+[dev-dependencies]
