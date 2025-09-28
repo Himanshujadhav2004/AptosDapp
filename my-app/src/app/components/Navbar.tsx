@@ -18,6 +18,15 @@ export const Navbar = () => {
   const [depositSuccess, setDepositSuccess] = useState<string | null>(null);
   const [userBalance, setUserBalance] = useState<number>(0);
   const [isLoadingUserBalance, setIsLoadingUserBalance] = useState(false);
+  const [usdcBalance, setUsdcBalance] = useState<number>(0);
+  const [isLoadingUsdcBalance, setIsLoadingUsdcBalance] = useState(false);
+  const [activeDepositTab, setActiveDepositTab] = useState<'apt' | 'usdc'>('apt');
+  const [usdcDepositAmount, setUsdcDepositAmount] = useState<string>('');
+  const [isDepositingUsdc, setIsDepositingUsdc] = useState(false);
+  const [usdcDepositError, setUsdcDepositError] = useState<string | null>(null);
+  const [usdcDepositSuccess, setUsdcDepositSuccess] = useState<string | null>(null);
+  const [usdcTreasuryBalance, setUsdcTreasuryBalance] = useState<number>(0);
+  const [isLoadingUsdcTreasuryBalance, setIsLoadingUsdcTreasuryBalance] = useState(false);
 
   const handleConnectClick = () => {
     setIsWalletModalOpen(true);
@@ -32,9 +41,14 @@ export const Navbar = () => {
     setDepositError(null);
     setDepositSuccess(null);
     setDepositAmount('');
-    // Fetch both user balance and treasury balance when opening deposit modal
+    setUsdcDepositError(null);
+    setUsdcDepositSuccess(null);
+    setUsdcDepositAmount('');
+    // Fetch user balance, treasury balance, and USDC balance when opening deposit modal
     fetchUserBalance();
     fetchTreasuryBalance();
+    fetchUSDCBalance();
+    fetchUSDCTreasuryBalance();
   };
 
   const handleCloseDepositModal = () => {
@@ -42,6 +56,10 @@ export const Navbar = () => {
     setDepositError(null);
     setDepositSuccess(null);
     setDepositAmount('');
+    setUsdcDepositError(null);
+    setUsdcDepositSuccess(null);
+    setUsdcDepositAmount('');
+    setActiveDepositTab('apt');
   };
 
   const handleDeposit = async () => {
@@ -77,7 +95,7 @@ export const Navbar = () => {
       const transaction = {
         sender: addressString,
         data: {
-          function: `${contractAddress}::paylance::deposit_apt`,
+          function: `${contractAddress}::paylance_v7::deposit_apt`,
           functionArguments: [amountInOctas.toString()],
         },
       };
@@ -98,6 +116,112 @@ export const Navbar = () => {
       setDepositError(`Deposit failed: ${err.message || 'Unknown error'}`);
     } finally {
       setIsDepositing(false);
+    }
+  };
+
+  const handleUSDCDeposit = async () => {
+    if (!account?.address || !usdcDepositAmount) {
+      setUsdcDepositError('Please enter a valid amount');
+      return;
+    }
+
+    const amount = parseFloat(usdcDepositAmount);
+    if (isNaN(amount) || amount <= 0) {
+      setUsdcDepositError('Please enter a valid amount greater than 0');
+      return;
+    }
+
+    if (amount > usdcBalance) {
+      setUsdcDepositError('Insufficient USDC balance in your wallet');
+      return;
+    }
+
+    // Check if company exists first
+    try {
+      const contractAddress = '0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994';
+      const addressString = typeof account.address === 'string' 
+        ? account.address 
+        : account.address.toString();
+      
+      const testnetConfig = new AptosConfig({ network: Network.TESTNET });
+      const testnetAptos = new Aptos(testnetConfig);
+      
+      // Check if company exists by trying to get company info
+      try {
+        await testnetAptos.view({
+          payload: {
+            function: `${contractAddress}::paylance_v7::get_company_info`,
+            functionArguments: [addressString],
+          },
+        });
+      } catch (companyError) {
+        setUsdcDepositError('Please create a company first before depositing USDC');
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking company existence:', err);
+      setUsdcDepositError('Error checking company status. Please try again.');
+      return;
+    }
+
+    setIsDepositingUsdc(true);
+    setUsdcDepositError(null);
+    setUsdcDepositSuccess(null);
+
+    try {
+      const amountInMicroUSDC = Math.floor(amount * 1000000); // Convert to micro-USDC (6 decimals)
+      const contractAddress = '0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994';
+      
+      // Convert address to hex string
+      const addressString = typeof account.address === 'string' 
+        ? account.address 
+        : account.address.toString();
+      
+      console.log('USDC Deposit - Amount:', amount, 'Micro-USDC:', amountInMicroUSDC);
+      console.log('USDC Deposit - Contract Address:', contractAddress);
+      console.log('USDC Deposit - User Address:', addressString);
+      
+      const transaction = {
+        sender: addressString,
+        data: {
+          function: `${contractAddress}::paylance_v7::deposit_usdc`,
+          functionArguments: [amountInMicroUSDC.toString()],
+        },
+      };
+
+      console.log('USDC Deposit - Transaction:', transaction);
+      
+      // Add timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Transaction timeout')), 30000); // 30 second timeout
+      });
+      
+      const result = await Promise.race([
+        signAndSubmitTransaction(transaction as any),
+        timeoutPromise
+      ]) as any;
+      
+      console.log('USDC Deposit - Result:', result);
+      
+      setUsdcDepositSuccess(`USDC Deposit successful! Transaction: ${result.hash}`);
+      setUsdcDepositAmount('');
+      
+      // Refresh balances after successful deposit
+      setTimeout(() => {
+        fetchUSDCBalance();
+        fetchUSDCTreasuryBalance();
+      }, 2000);
+
+    } catch (err: any) {
+      console.error('USDC Deposit failed:', err);
+      console.error('USDC Deposit error details:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
+      setUsdcDepositError(`USDC Deposit failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsDepositingUsdc(false);
     }
   };
 
@@ -148,6 +272,78 @@ export const Navbar = () => {
     }
   };
 
+  // Fetch USDC token balance using Fungible Asset standard
+  const fetchUSDCBalance = async () => {
+    if (!account?.address) return;
+
+    setIsLoadingUsdcBalance(true);
+    try {
+      const addressString = account.address.toString();
+      const tokenAddress = "0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832";
+      
+      // Try testnet first
+      const testnetConfig = new AptosConfig({ network: Network.TESTNET });
+      const testnetAptos = new Aptos(testnetConfig);
+      
+      try {
+        // Use the proper FA balance checking method
+        const balance = await testnetAptos.getCurrentFungibleAssetBalances({
+          options: {
+            where: {
+              owner_address: { _eq: addressString },
+              asset_type: { _eq: tokenAddress }
+            }
+          }
+        });
+
+        if (balance && balance.length > 0) {
+          const usdcBalance = Number(balance[0].amount) / 1000000; // Convert from micro-USDC to USDC (6 decimals)
+          console.log(`Testnet USDC balance: ${usdcBalance}`);
+          setUsdcBalance(usdcBalance);
+          return;
+        } else {
+          console.log("No USDC balance found on testnet");
+          setUsdcBalance(0);
+          return;
+        }
+      } catch (testnetError) {
+        console.log("Testnet USDC balance fetch failed, trying mainnet...");
+        
+        // Fallback to mainnet
+        const mainnetConfig = new AptosConfig({ network: Network.MAINNET });
+        const mainnetAptos = new Aptos(mainnetConfig);
+        
+        try {
+          const balance = await mainnetAptos.getCurrentFungibleAssetBalances({
+            options: {
+              where: {
+                owner_address: { _eq: addressString },
+                asset_type: { _eq: tokenAddress }
+              }
+            }
+          });
+
+          if (balance && balance.length > 0) {
+            const usdcBalance = Number(balance[0].amount) / 1000000; // Convert from micro-USDC to USDC (6 decimals)
+            console.log(`Mainnet USDC balance: ${usdcBalance}`);
+            setUsdcBalance(usdcBalance);
+          } else {
+            console.log("No USDC balance found on mainnet");
+            setUsdcBalance(0);
+          }
+        } catch (mainnetError) {
+          console.log("No USDC balance found on either network");
+          setUsdcBalance(0);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching USDC balance:", err);
+      setUsdcBalance(0);
+    } finally {
+      setIsLoadingUsdcBalance(false);
+    }
+  };
+
   // Fetch company treasury balance
   const fetchTreasuryBalance = async () => {
     if (!account?.address) return;
@@ -164,7 +360,7 @@ export const Navbar = () => {
       try {
         const treasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -182,7 +378,7 @@ export const Navbar = () => {
         
         const treasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -199,12 +395,65 @@ export const Navbar = () => {
     }
   };
 
+  // Fetch USDC treasury balance
+  const fetchUSDCTreasuryBalance = async () => {
+    if (!account?.address) return;
+
+    setIsLoadingUsdcTreasuryBalance(true);
+    try {
+      const addressString = account.address.toString();
+      const contractAddress = '0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994';
+      
+      // Try testnet first
+      const testnetConfig = new AptosConfig({ network: Network.TESTNET });
+      const testnetAptos = new Aptos(testnetConfig);
+      
+      try {
+        const usdcTreasuryBalance = await testnetAptos.view({
+          payload: {
+            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            functionArguments: [addressString],
+          },
+        });
+        
+        const balance = Number(usdcTreasuryBalance[0]) / 1000000; // Convert from micro-USDC to USDC (6 decimals)
+        console.log(`Testnet USDC treasury balance: ${balance} USDC`);
+        setUsdcTreasuryBalance(balance);
+        return;
+      } catch (testnetError) {
+        console.log("Testnet USDC treasury balance fetch failed, trying mainnet...");
+        
+        // Fallback to mainnet
+        const mainnetConfig = new AptosConfig({ network: Network.MAINNET });
+        const mainnetAptos = new Aptos(mainnetConfig);
+        
+        const usdcTreasuryBalance = await mainnetAptos.view({
+          payload: {
+            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            functionArguments: [addressString],
+          },
+        });
+        
+        const balance = Number(usdcTreasuryBalance[0]) / 1000000; // Convert from micro-USDC to USDC (6 decimals)
+        console.log(`Mainnet USDC treasury balance: ${balance} USDC`);
+        setUsdcTreasuryBalance(balance);
+      }
+    } catch (err) {
+      console.error("Error fetching USDC treasury balance:", err);
+      setUsdcTreasuryBalance(0);
+    } finally {
+      setIsLoadingUsdcTreasuryBalance(false);
+    }
+  };
+
   // Fetch treasury balance when account changes
   useEffect(() => {
     if (connected && account?.address) {
       fetchTreasuryBalance();
+      fetchUSDCTreasuryBalance();
     } else {
       setBalance(0);
+      setUsdcTreasuryBalance(0);
     }
   }, [connected, account?.address]);
 
@@ -269,17 +518,34 @@ export const Navbar = () => {
               {connected && account ? (
                 <>
                   {/* Treasury Balance Display */}
-                  <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    {isLoadingBalance ? (
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                    ) : (
-                      <span className="text-sm font-medium text-gray-700">
-                        {balance.toFixed(4)} APT
-                      </span>
-                    )}
+                  <div className="flex items-center space-x-4">
+                    {/* APT Treasury Balance */}
+                    <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      {isLoadingBalance ? (
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                      ) : (
+                        <span className="text-sm font-medium text-gray-700">
+                          {balance.toFixed(4)} APT
+                        </span>
+                      )}
+                    </div>
+
+                    {/* USDC Treasury Balance */}
+                    <div className="flex items-center space-x-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                      </svg>
+                      {isLoadingUsdcTreasuryBalance ? (
+                        <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
+                      ) : (
+                        <span className="text-sm font-medium text-purple-700">
+                          {usdcTreasuryBalance.toFixed(2)} USDC
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Deposit Button */}
@@ -380,7 +646,7 @@ export const Navbar = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Deposit APT Tokens</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Deposit Tokens</h3>
               <button
                 onClick={handleCloseDepositModal}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -391,150 +657,355 @@ export const Navbar = () => {
               </button>
             </div>
 
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-200">
+              <button
+                onClick={() => setActiveDepositTab('apt')}
+                className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                  activeDepositTab === 'apt'
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                  <span>APT</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveDepositTab('usdc')}
+                className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                  activeDepositTab === 'usdc'
+                    ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                  </svg>
+                  <span>USDC</span>
+                </div>
+              </button>
+            </div>
+
             {/* Modal Body */}
             <div className="p-6">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </div>
-                <h4 className="text-lg font-medium text-gray-900 mb-2">Deposit to Contract Treasury</h4>
-                <p className="text-sm text-gray-600">
-                  Deposit APT tokens directly to the contract treasury using smart contract function
-                </p>
-              </div>
+              {activeDepositTab === 'apt' ? (
+                <>
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                      </svg>
+                    </div>
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">Deposit APT to Treasury</h4>
+                    <p className="text-sm text-gray-600">
+                      Deposit APT tokens directly to the contract treasury using smart contract function
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                      </svg>
+                    </div>
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">Deposit USDC to Treasury</h4>
+                    <p className="text-sm text-gray-600">
+                      Deposit USDC tokens directly to the contract treasury using smart contract function
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Balance Information */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {/* User Wallet Balance */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                      </svg>
-                      <span className="text-sm font-medium text-blue-700">Your Wallet:</span>
+                {activeDepositTab === 'apt' ? (
+                  <>
+                    {/* User APT Wallet Balance */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                          </svg>
+                          <span className="text-sm font-medium text-blue-700">Your APT:</span>
+                        </div>
+                        <span className="text-sm font-semibold text-blue-900">
+                          {isLoadingUserBalance ? (
+                            <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                          ) : (
+                            `${userBalance.toFixed(4)} APT`
+                          )}
+                        </span>
+                      </div>
+                      <p className="text-xs text-blue-600 mt-1">Available to deposit</p>
                     </div>
-                    <span className="text-sm font-semibold text-blue-900">
-                      {isLoadingUserBalance ? (
-                        <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
-                      ) : (
-                        `${userBalance.toFixed(4)} APT`
-                      )}
-                    </span>
-                  </div>
-                  <p className="text-xs text-blue-600 mt-1">Available to deposit</p>
-                </div>
 
-                {/* Treasury Balance */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                      <span className="text-sm font-medium text-green-700">Treasury:</span>
+                    {/* Treasury APT Balance */}
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          <span className="text-sm font-medium text-green-700">Treasury APT:</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-semibold text-green-900">
+                            {isLoadingBalance ? (
+                              <div className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin"></div>
+                            ) : (
+                              `${balance.toFixed(4)} APT`
+                            )}
+                          </span>
+                          <button
+                            onClick={fetchTreasuryBalance}
+                            disabled={isLoadingBalance}
+                            className="p-1 text-green-500 hover:text-green-700 disabled:opacity-50"
+                            title="Refresh Treasury Balance"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-green-600 mt-1">Available for payroll</p>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-semibold text-green-900">
-                        {isLoadingBalance ? (
-                          <div className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin"></div>
-                        ) : (
-                          `${balance.toFixed(4)} APT`
-                        )}
-                      </span>
-                      <button
-                        onClick={fetchTreasuryBalance}
-                        disabled={isLoadingBalance}
-                        className="p-1 text-green-500 hover:text-green-700 disabled:opacity-50"
-                        title="Refresh Treasury Balance"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </button>
+                  </>
+                ) : (
+                  <>
+                    {/* User USDC Wallet Balance */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                          </svg>
+                          <span className="text-sm font-medium text-purple-700">Your USDC:</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-semibold text-purple-900">
+                            {isLoadingUsdcBalance ? (
+                              <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
+                            ) : (
+                              `${usdcBalance.toFixed(2)} USDC`
+                            )}
+                          </span>
+                          <button
+                            onClick={fetchUSDCBalance}
+                            disabled={isLoadingUsdcBalance}
+                            className="p-1 text-purple-500 hover:text-purple-700 disabled:opacity-50"
+                            title="Refresh USDC Balance"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-purple-600 mt-1">Available to deposit</p>
                     </div>
-                  </div>
-                  <p className="text-xs text-green-600 mt-1">Available for payroll</p>
-                </div>
+
+                    {/* Treasury USDC Balance */}
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          <span className="text-sm font-medium text-indigo-700">Treasury USDC:</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-semibold text-indigo-900">
+                            {isLoadingUsdcTreasuryBalance ? (
+                              <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
+                            ) : (
+                              `${usdcTreasuryBalance.toFixed(2)} USDC`
+                            )}
+                          </span>
+                          <button
+                            onClick={fetchUSDCTreasuryBalance}
+                            disabled={isLoadingUsdcTreasuryBalance}
+                            className="p-1 text-indigo-500 hover:text-indigo-700 disabled:opacity-50"
+                            title="Refresh USDC Treasury Balance"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-indigo-600 mt-1">Available for payroll</p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Deposit Amount Input */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Deposit Amount (APT)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                    </svg>
-                  </div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max={userBalance}
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    placeholder="Enter amount to deposit"
-                    disabled={isDepositing}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Enter amount in APT (e.g., 1.5 for 1.5 APT)</p>
+                {activeDepositTab === 'apt' ? (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Deposit Amount (APT)</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                      </div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max={userBalance}
+                        value={depositAmount}
+                        onChange={(e) => setDepositAmount(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="Enter amount to deposit"
+                        disabled={isDepositing}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Enter amount in APT (e.g., 1.5 for 1.5 APT)</p>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Deposit Amount (USDC)</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                        </svg>
+                      </div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max={usdcBalance}
+                        value={usdcDepositAmount}
+                        onChange={(e) => setUsdcDepositAmount(e.target.value)}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Enter amount to deposit"
+                        disabled={isDepositingUsdc}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Enter amount in USDC (e.g., 100 for 100 USDC)</p>
+                  </>
+                )}
               </div>
 
               {/* Error/Success Messages */}
-              {depositError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm text-red-800">{depositError}</span>
-                  </div>
-                </div>
-              )}
+              {activeDepositTab === 'apt' ? (
+                <>
+                  {depositError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm text-red-800">{depositError}</span>
+                      </div>
+                    </div>
+                  )}
 
-              {depositSuccess && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm text-green-800">{depositSuccess}</span>
-                  </div>
-                </div>
+                  {depositSuccess && (
+                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm text-green-800">{depositSuccess}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {usdcDepositError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm text-red-800">{usdcDepositError}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {usdcDepositSuccess && (
+                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="flex items-center">
+                        <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span className="text-sm text-green-800">{usdcDepositSuccess}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Quick Amount Buttons */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Quick Amounts</label>
                 <div className="grid grid-cols-4 gap-2">
-                  {[0.1, 0.5, 1.0, 2.0].map((amount) => (
-                    <button
-                      key={amount}
-                      onClick={() => setDepositAmount(amount.toString())}
-                      disabled={isDepositing || amount > userBalance}
-                      className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {amount} APT
-                    </button>
-                  ))}
+                  {activeDepositTab === 'apt' ? (
+                    [0.1, 0.5, 1.0, 2.0].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => setDepositAmount(amount.toString())}
+                        disabled={isDepositing || amount > userBalance}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {amount} APT
+                      </button>
+                    ))
+                  ) : (
+                    [10, 50, 100, 200].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => setUsdcDepositAmount(amount.toString())}
+                        disabled={isDepositingUsdc || amount > usdcBalance}
+                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {amount} USDC
+                      </button>
+                    ))
+                  )}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Based on your wallet balance</p>
               </div>
 
               {/* Contract Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className={`border rounded-lg p-4 ${
+                activeDepositTab === 'apt' 
+                  ? 'bg-blue-50 border-blue-200' 
+                  : 'bg-purple-50 border-purple-200'
+              }`}>
                 <div className="flex items-start space-x-3">
-                  <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className={`w-5 h-5 mt-0.5 ${
+                    activeDepositTab === 'apt' ? 'text-blue-600' : 'text-purple-600'
+                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div>
-                    <h5 className="text-sm font-medium text-blue-900 mb-1">Smart Contract Deposit</h5>
-                    <p className="text-xs text-blue-800">
-                      This deposit uses the contract's deposit_apt function to securely transfer tokens to the treasury for payroll operations.
+                    <h5 className={`text-sm font-medium mb-1 ${
+                      activeDepositTab === 'apt' ? 'text-blue-900' : 'text-purple-900'
+                    }`}>
+                      Smart Contract Deposit
+                    </h5>
+                    <p className={`text-xs ${
+                      activeDepositTab === 'apt' ? 'text-blue-800' : 'text-purple-800'
+                    }`}>
+                      {activeDepositTab === 'apt' 
+                        ? "This deposit uses the contract's deposit_apt function to securely transfer APT tokens to the treasury for payroll operations."
+                        : "This deposit uses the contract's deposit_usdc function to securely transfer USDC tokens to the treasury for payroll operations."
+                      }
                     </p>
                   </div>
                 </div>
@@ -549,20 +1020,37 @@ export const Navbar = () => {
               >
                 Cancel
               </button>
-              <button
-                onClick={handleDeposit}
-                disabled={isDepositing || !depositAmount || parseFloat(depositAmount) <= 0 || parseFloat(depositAmount) > userBalance}
-                className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDepositing ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Depositing...</span>
-                  </div>
-                ) : (
-                  'Deposit APT'
-                )}
-              </button>
+              {activeDepositTab === 'apt' ? (
+                <button
+                  onClick={handleDeposit}
+                  disabled={isDepositing || !depositAmount || parseFloat(depositAmount) <= 0 || parseFloat(depositAmount) > userBalance}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDepositing ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Depositing...</span>
+                    </div>
+                  ) : (
+                    'Deposit APT'
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={handleUSDCDeposit}
+                  disabled={isDepositingUsdc || !usdcDepositAmount || parseFloat(usdcDepositAmount) <= 0 || parseFloat(usdcDepositAmount) > usdcBalance}
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDepositingUsdc ? (
+                    <div className="flex items-center space-x-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Depositing...</span>
+                    </div>
+                  ) : (
+                    'Deposit USDC'
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

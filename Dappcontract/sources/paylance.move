@@ -1,5 +1,5 @@
-// Paylance Payroll System - Move Implementation
-module paylance_addr::paylance {
+// Paylance Payroll System - Move Implementation with USDC Support
+module paylance_addr::paylance_v7 {
     use std::string::{Self, String};
     use std::vector;
     use std::signer;
@@ -9,6 +9,14 @@ module paylance_addr::paylance {
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::event::{Self, EventHandle};
     use aptos_framework::account;
+    use aptos_framework::fungible_asset::{Self, Metadata, FungibleStore};
+    use aptos_framework::object::Object;
+    use aptos_framework::object;
+    use aptos_framework::primary_fungible_store;
+    use aptos_framework::dispatchable_fungible_asset;
+    use aptos_framework::resource_account;
+    // Note: Pyth integration will be implemented with proper price feed access
+    // For now, we'll use a simplified approach with manual price conversion
 
     // Error codes
     const ENOT_ADMIN: u64 = 1;
@@ -20,17 +28,24 @@ module paylance_addr::paylance {
     const ECOMPANY_NOT_INITIALIZED: u64 = 7;
     const ECOMPANY_ALREADY_EXISTS: u64 = 8;
     const EINVALID_AMOUNT: u64 = 9;
+    const EINVALID_PRICE_FEED: u64 = 10;
+    const EINSUFFICIENT_USDC_BALANCE: u64 = 11;
+    const EINVALID_TOKEN_TYPE: u64 = 12;
 
-    // Employee structure
+    // USDC Metadata Address (Fungible Asset)
+    const USDC_METADATA_ADDRESS: address = @0x69091fbab5f7d635ee7ac5098cf0c1efbe31d68fec0f2cd565e8d168daf52832;
+
+    // Employee structure - salary now in USDC (6 decimals)
     struct Employee has store, copy, drop {
         name: String,
         email: String,
         wallet: address,
         role: String,
-        salary: u64,
+        salary_usdc: u64, // Salary in USDC (6 decimals)
         paused: bool,
         last_paid: u64,
-        total_paid: u64,
+        total_paid_usdc: u64, // Total paid in USDC
+        total_paid_apt: u64, // Total paid in APT (for tracking)
     }
 
     // Payment log structure
@@ -41,7 +56,9 @@ module paylance_addr::paylance {
         employee_role: String,
         employee_email: String,
         employee_wallet: address,
-        token_type: String, // "APT" or custom token identifier
+        token_type: String, // "APT" or "USDC"
+        usdc_amount: u64, // Amount in USDC (for tracking)
+        apt_amount: u64, // Amount in APT (for tracking)
     }
 
     // Main company resource
@@ -64,6 +81,12 @@ module paylance_addr::paylance {
     struct Treasury<phantom CoinType> has key {
         coins: Coin<CoinType>,
     }
+
+    // USDC Treasury to hold company's USDC funds
+    struct USDC_Treasury has key {
+        usdc_balance: u64, // Simple balance tracking for USDC
+    }
+
 
     // Global registry to track all companies
     struct CompanyRegistry has key {
@@ -88,7 +111,7 @@ module paylance_addr::paylance {
         wallet: address,
         name: String,
         role: String,
-        salary: u64,
+        salary_usdc: u64,
     }
 
     struct EmployeeRemovedEvent has store, drop {
@@ -100,6 +123,8 @@ module paylance_addr::paylance {
         employee_wallet: address,
         amount: u64,
         token_type: String,
+        usdc_amount: u64,
+        apt_amount: u64,
     }
 
     struct PayrollPausedEvent has store, drop {
@@ -166,8 +191,14 @@ module paylance_addr::paylance {
             coins: coin::zero<AptosCoin>(),
         };
 
+        // Create simple USDC treasury
+        let usdc_treasury = USDC_Treasury {
+            usdc_balance: 0,
+        };
+
         move_to(admin, company);
         move_to(admin, treasury);
+        move_to(admin, usdc_treasury);
 
         // Update global registry
         if (exists<CompanyRegistry>(registry_address)) {
@@ -194,7 +225,7 @@ module paylance_addr::paylance {
         email: String,
         wallet: address,
         role: String,
-        salary: u64,
+        salary_usdc: u64, // Salary in USDC (6 decimals)
     ) acquires Company {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
@@ -216,10 +247,11 @@ module paylance_addr::paylance {
             email,
             wallet,
             role,
-            salary,
+            salary_usdc,
             paused: false,
             last_paid: 0,
-            total_paid: 0,
+            total_paid_usdc: 0,
+            total_paid_apt: 0,
         };
 
         vector::push_back(&mut company.employees, employee);
@@ -229,7 +261,7 @@ module paylance_addr::paylance {
             wallet,
             name,
             role,
-            salary,
+            salary_usdc,
         });
     }
 
@@ -282,7 +314,7 @@ module paylance_addr::paylance {
         while (i < len) {
             let emp = vector::borrow_mut(&mut company.employees, i);
             if (emp.wallet == employee_wallet) {
-                emp.salary = new_salary;
+                emp.salary_usdc = new_salary;
                 found = true;
                 break
             };
@@ -444,7 +476,7 @@ module paylance_addr::paylance {
                 emp.name = new_name;
                 emp.email = new_email;
                 emp.role = new_role;
-                emp.salary = new_salary;
+                emp.salary_usdc = new_salary;
                 emp.wallet = new_wallet;
                 found = true;
                 break
@@ -491,7 +523,7 @@ module paylance_addr::paylance {
                 emp.name = new_name;
                 emp.email = new_email;
                 emp.role = new_role;
-                emp.salary = new_salary;
+                emp.salary_usdc = new_salary;
                 emp.wallet = new_wallet;
                 emp.paused = new_paused;
                 found = true;
@@ -588,8 +620,136 @@ module paylance_addr::paylance {
         coin::merge(&mut treasury.coins, coins);
     }
 
-    // Payment functions
-    public entry fun pay_single_employee(
+    // Simple deposit USDC function - just track balance without moving tokens
+    public entry fun deposit_usdc(
+        admin: &signer,
+        amount: u64,
+    ) acquires USDC_Treasury {
+        let admin_addr = signer::address_of(admin);
+        assert!(exists<USDC_Treasury>(admin_addr), ECOMPANY_NOT_INITIALIZED);
+        assert!(amount > 0, EINVALID_AMOUNT);
+
+        // Get USDC metadata object
+        let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
+        
+        // Check admin has sufficient USDC balance in their primary store
+        let admin_balance = primary_fungible_store::balance(admin_addr, usdc_metadata);
+        assert!(admin_balance >= amount, EINSUFFICIENT_USDC_BALANCE);
+        
+        // Just update treasury balance tracking - USDC stays in admin's wallet
+        let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
+        treasury.usdc_balance = treasury.usdc_balance + amount;
+    }
+
+    // Price conversion helper functions
+    // Note: These functions will be updated to use Pyth price feeds in production
+    // For now, using simplified conversion logic
+    
+    // Simplified APT price (example: $10 per APT)
+    public fun get_apt_price(): u64 {
+        1000000000 // $10.00 in 8 decimals
+    }
+
+    // Simplified USDC price (example: $1 per USDC)
+    public fun get_usdc_price(): u64 {
+        100000000 // $1.00 in 8 decimals
+    }
+
+    // Convert USDC amount to APT amount using simplified pricing
+    public fun convert_usdc_to_apt(usdc_amount: u64): u64 {
+        let apt_price = get_apt_price();
+        let usdc_price = get_usdc_price();
+        
+        // Convert: (USDC_amount * USDC_price) / APT_price
+        let numerator = usdc_amount * usdc_price;
+        let denominator = apt_price;
+        
+        numerator / denominator
+    }
+
+    // Convert APT amount to USDC amount using simplified pricing
+    public fun convert_apt_to_usdc(apt_amount: u64): u64 {
+        let apt_price = get_apt_price();
+        let usdc_price = get_usdc_price();
+        
+        // Convert: (APT_amount * APT_price) / USDC_price
+        let numerator = apt_amount * apt_price;
+        let denominator = usdc_price;
+        
+        numerator / denominator
+    }
+
+    // Fixed single employee USDC payment function
+    public entry fun pay_single_employee_usdc(
+        admin: &signer,
+        employee_wallet: address,
+    ) acquires Company, USDC_Treasury {
+        let admin_addr = signer::address_of(admin);
+        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
+        
+        let company = borrow_global_mut<Company>(admin_addr);
+        assert!(company.admin == admin_addr, ENOT_ADMIN);
+        assert!(!company.payroll_paused, EPAYROLL_PAUSED);
+
+        // Find employee
+        let len = vector::length(&company.employees);
+        let i = 0;
+        let found = false;
+        while (i < len) {
+            let emp = vector::borrow_mut(&mut company.employees, i);
+            if (emp.wallet == employee_wallet) {
+                assert!(!emp.paused, EEMPLOYEE_PAUSED);
+                
+                // Get company USDC treasury and check balance
+                let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
+                assert!(treasury.usdc_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
+                
+                // Get USDC metadata object
+                let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
+                
+                // Transfer USDC directly from admin to employee using primary store transfer
+                primary_fungible_store::transfer(admin, usdc_metadata, employee_wallet, emp.salary_usdc);
+                
+                // Update treasury balance
+                treasury.usdc_balance = treasury.usdc_balance - emp.salary_usdc;
+                
+                // Update employee record
+                emp.last_paid = timestamp::now_microseconds();
+                emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
+                
+                // Log payment
+                let payment_log = PaymentLog {
+                    timestamp: timestamp::now_microseconds(),
+                    amount: emp.salary_usdc,
+                    employee_name: emp.name,
+                    employee_role: emp.role,
+                    employee_email: emp.email,
+                    employee_wallet: emp.wallet,
+                    token_type: string::utf8(b"USDC"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: 0,
+                };
+                vector::push_back(&mut company.all_payments, payment_log);
+                
+                // Emit event
+                event::emit_event(&mut company.salary_paid_events, SalaryPaidEvent {
+                    employee_wallet: emp.wallet,
+                    amount: emp.salary_usdc,
+                    token_type: string::utf8(b"USDC"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: 0,
+                });
+                
+                found = true;
+                break
+            };
+            i = i + 1;
+        };
+        assert!(found, EEMPLOYEE_NOT_FOUND);
+    }
+
+    // Payment functions - Pay employee in APT (converted from USDC salary)
+    public entry fun pay_single_employee_apt(
         admin: &signer,
         employee_wallet: address,
     ) acquires Company, Treasury {
@@ -609,35 +769,43 @@ module paylance_addr::paylance {
             if (emp.wallet == employee_wallet) {
                 assert!(!emp.paused, EEMPLOYEE_PAUSED);
                 
-                // Check treasury balance
-                let treasury = borrow_global_mut<Treasury<AptosCoin>>(admin_addr);
-                assert!(coin::value(&treasury.coins) >= emp.salary, EINSUFFICIENT_BALANCE);
+                // Convert USDC salary to APT amount using Pyth price feeds
+                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
                 
-                // Transfer payment
-                let payment = coin::extract(&mut treasury.coins, emp.salary);
+                // Check APT treasury balance
+                let treasury = borrow_global_mut<Treasury<AptosCoin>>(admin_addr);
+                assert!(coin::value(&treasury.coins) >= apt_amount, EINSUFFICIENT_BALANCE);
+                
+                // Transfer APT payment
+                let payment = coin::extract(&mut treasury.coins, apt_amount);
                 coin::deposit(emp.wallet, payment);
                 
                 // Update employee record
                 emp.last_paid = timestamp::now_microseconds();
-                emp.total_paid = emp.total_paid + emp.salary;
+                emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
+                emp.total_paid_apt = emp.total_paid_apt + apt_amount;
                 
                 // Log payment
                 let payment_log = PaymentLog {
                     timestamp: timestamp::now_microseconds(),
-                    amount: emp.salary,
+                    amount: apt_amount,
                     employee_name: emp.name,
                     employee_role: emp.role,
                     employee_email: emp.email,
                     employee_wallet: emp.wallet,
                     token_type: string::utf8(b"APT"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: apt_amount,
                 };
                 vector::push_back(&mut company.all_payments, payment_log);
                 
                 // Emit event
                 event::emit_event(&mut company.salary_paid_events, SalaryPaidEvent {
                     employee_wallet: emp.wallet,
-                    amount: emp.salary,
+                    amount: apt_amount,
                     token_type: string::utf8(b"APT"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: apt_amount,
                 });
                 
                 found = true;
@@ -648,7 +816,8 @@ module paylance_addr::paylance {
         assert!(found, EEMPLOYEE_NOT_FOUND);
     }
 
-    public entry fun pay_all_employees(admin: &signer) acquires Company, Treasury {
+    // Fixed bulk USDC payment function
+    public entry fun pay_all_employees_usdc(admin: &signer) acquires Company, USDC_Treasury {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
         
@@ -656,48 +825,122 @@ module paylance_addr::paylance {
         assert!(company.admin == admin_addr, ENOT_ADMIN);
         assert!(!company.payroll_paused, EPAYROLL_PAUSED);
 
-        // Calculate total payroll
-        let total_payroll = 0;
+        // Calculate total USDC payroll
+        let total_usdc_payroll = 0;
         let len = vector::length(&company.employees);
         let i = 0;
         while (i < len) {
             let emp = vector::borrow(&company.employees, i);
             if (!emp.paused) {
-                total_payroll = total_payroll + emp.salary;
+                total_usdc_payroll = total_usdc_payroll + emp.salary_usdc;
             };
             i = i + 1;
         };
 
-        // Check treasury balance
-        let treasury = borrow_global_mut<Treasury<AptosCoin>>(admin_addr);
-        assert!(coin::value(&treasury.coins) >= total_payroll, EINSUFFICIENT_BALANCE);
+        // Check company USDC treasury balance
+        let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
+        assert!(treasury.usdc_balance >= total_usdc_payroll, EINSUFFICIENT_USDC_BALANCE);
 
         // Pay all active employees
         i = 0;
         while (i < len) {
             let emp = vector::borrow_mut(&mut company.employees, i);
             if (!emp.paused) {
-                let payment = coin::extract(&mut treasury.coins, emp.salary);
-                coin::deposit(emp.wallet, payment);
+                // Get USDC metadata object
+                let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
+                
+                // Transfer USDC directly from admin to employee using primary store transfer
+                primary_fungible_store::transfer(admin, usdc_metadata, emp.wallet, emp.salary_usdc);
+                
+                // Update treasury balance
+                treasury.usdc_balance = treasury.usdc_balance - emp.salary_usdc;
                 
                 emp.last_paid = timestamp::now_microseconds();
-                emp.total_paid = emp.total_paid + emp.salary;
+                emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
                 
                 let payment_log = PaymentLog {
                     timestamp: timestamp::now_microseconds(),
-                    amount: emp.salary,
+                    amount: emp.salary_usdc,
                     employee_name: emp.name,
                     employee_role: emp.role,
                     employee_email: emp.email,
                     employee_wallet: emp.wallet,
-                    token_type: string::utf8(b"APT"),
+                    token_type: string::utf8(b"USDC"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: 0,
                 };
                 vector::push_back(&mut company.all_payments, payment_log);
                 
                 event::emit_event(&mut company.salary_paid_events, SalaryPaidEvent {
                     employee_wallet: emp.wallet,
-                    amount: emp.salary,
+                    amount: emp.salary_usdc,
+                    token_type: string::utf8(b"USDC"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: 0,
+                });
+            };
+            i = i + 1;
+        };
+    }
+
+    // Bulk payment functions - Pay all employees in APT (converted from USDC)
+    public entry fun pay_all_employees_apt(admin: &signer) acquires Company, Treasury {
+        let admin_addr = signer::address_of(admin);
+        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
+        
+        let company = borrow_global_mut<Company>(admin_addr);
+        assert!(company.admin == admin_addr, ENOT_ADMIN);
+        assert!(!company.payroll_paused, EPAYROLL_PAUSED);
+
+        // Calculate total APT payroll (converted from USDC salaries)
+        let total_apt_payroll = 0;
+        let len = vector::length(&company.employees);
+        let i = 0;
+        while (i < len) {
+            let emp = vector::borrow(&company.employees, i);
+            if (!emp.paused) {
+                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                total_apt_payroll = total_apt_payroll + apt_amount;
+            };
+            i = i + 1;
+        };
+
+        // Check APT treasury balance
+        let treasury = borrow_global_mut<Treasury<AptosCoin>>(admin_addr);
+        assert!(coin::value(&treasury.coins) >= total_apt_payroll, EINSUFFICIENT_BALANCE);
+
+        // Pay all active employees
+        i = 0;
+        while (i < len) {
+            let emp = vector::borrow_mut(&mut company.employees, i);
+            if (!emp.paused) {
+                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                let payment = coin::extract(&mut treasury.coins, apt_amount);
+                coin::deposit(emp.wallet, payment);
+                
+                emp.last_paid = timestamp::now_microseconds();
+                emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
+                emp.total_paid_apt = emp.total_paid_apt + apt_amount;
+                
+                let payment_log = PaymentLog {
+                    timestamp: timestamp::now_microseconds(),
+                    amount: apt_amount,
+                    employee_name: emp.name,
+                    employee_role: emp.role,
+                    employee_email: emp.email,
+                    employee_wallet: emp.wallet,
                     token_type: string::utf8(b"APT"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: apt_amount,
+                };
+                vector::push_back(&mut company.all_payments, payment_log);
+                
+                event::emit_event(&mut company.salary_paid_events, SalaryPaidEvent {
+                    employee_wallet: emp.wallet,
+                    amount: apt_amount,
+                    token_type: string::utf8(b"APT"),
+                    usdc_amount: emp.salary_usdc,
+                    apt_amount: apt_amount,
                 });
             };
             i = i + 1;
@@ -733,34 +976,120 @@ module paylance_addr::paylance {
                 if (emp.wallet == employee_wallet) {
                     assert!(!emp.paused, EEMPLOYEE_PAUSED);
                     
+                    // Convert USDC salary to APT amount
+                    let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                    
                     // Check treasury balance for this employee
-                    assert!(coin::value(&treasury.coins) >= emp.salary, EINSUFFICIENT_BALANCE);
+                    assert!(coin::value(&treasury.coins) >= apt_amount, EINSUFFICIENT_BALANCE);
                     
                     // Transfer payment
-                    let payment = coin::extract(&mut treasury.coins, emp.salary);
+                    let payment = coin::extract(&mut treasury.coins, apt_amount);
                     coin::deposit(employee_wallet, payment);
                     
                     // Update employee record
                     emp.last_paid = timestamp::now_microseconds();
-                    emp.total_paid = emp.total_paid + emp.salary;
+                    emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
+                    emp.total_paid_apt = emp.total_paid_apt + apt_amount;
                     
                     // Log payment
                     let payment_log = PaymentLog {
                         timestamp: timestamp::now_microseconds(),
-                        amount: emp.salary,
+                        amount: apt_amount,
                         employee_name: emp.name,
                         employee_role: emp.role,
                         employee_email: emp.email,
                         employee_wallet: emp.wallet,
                         token_type: string::utf8(b"APT"),
+                        usdc_amount: emp.salary_usdc,
+                        apt_amount: apt_amount,
                     };
                     vector::push_back(&mut company.all_payments, payment_log);
                     
                     // Emit event
                     event::emit_event(&mut company.salary_paid_events, SalaryPaidEvent {
                         employee_wallet: emp.wallet,
-                        amount: emp.salary,
+                        amount: apt_amount,
                         token_type: string::utf8(b"APT"),
+                        usdc_amount: emp.salary_usdc,
+                        apt_amount: apt_amount,
+                    });
+                    
+                    found = true;
+                    break
+                };
+                j = j + 1;
+            };
+            assert!(found, EEMPLOYEE_NOT_FOUND);
+            i = i + 1;
+        };
+    }
+
+    // Fixed selected employees USDC payment function
+    public entry fun pay_selected_employees_usdc(
+        admin: &signer,
+        employee_wallets: vector<address>
+    ) acquires Company, USDC_Treasury {
+        let admin_addr = signer::address_of(admin);
+        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
+        
+        let company = borrow_global_mut<Company>(admin_addr);
+        assert!(company.admin == admin_addr, ENOT_ADMIN);
+        assert!(!company.payroll_paused, EPAYROLL_PAUSED);
+
+        let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
+        let selected_count = vector::length(&employee_wallets);
+        let i = 0;
+
+        // Process each selected employee
+        while (i < selected_count) {
+            let employee_wallet = *vector::borrow(&employee_wallets, i);
+            
+            // Find employee in company
+            let emp_len = vector::length(&company.employees);
+            let j = 0;
+            let found = false;
+            while (j < emp_len) {
+                let emp = vector::borrow_mut(&mut company.employees, j);
+                if (emp.wallet == employee_wallet) {
+                    assert!(!emp.paused, EEMPLOYEE_PAUSED);
+                    
+                    // Check company USDC treasury balance for this employee
+                    assert!(treasury.usdc_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
+                    
+                    // Get USDC metadata object
+                    let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
+                    
+                    // Transfer USDC directly from admin to employee using primary store transfer
+                    primary_fungible_store::transfer(admin, usdc_metadata, employee_wallet, emp.salary_usdc);
+                    
+                    // Update treasury balance
+                    treasury.usdc_balance = treasury.usdc_balance - emp.salary_usdc;
+                    
+                    // Update employee record
+                    emp.last_paid = timestamp::now_microseconds();
+                    emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
+                    
+                    // Log payment
+                    let payment_log = PaymentLog {
+                        timestamp: timestamp::now_microseconds(),
+                        amount: emp.salary_usdc,
+                        employee_name: emp.name,
+                        employee_role: emp.role,
+                        employee_email: emp.email,
+                        employee_wallet: emp.wallet,
+                        token_type: string::utf8(b"USDC"),
+                        usdc_amount: emp.salary_usdc,
+                        apt_amount: 0,
+                    };
+                    vector::push_back(&mut company.all_payments, payment_log);
+                    
+                    // Emit event
+                    event::emit_event(&mut company.salary_paid_events, SalaryPaidEvent {
+                        employee_wallet: emp.wallet,
+                        amount: emp.salary_usdc,
+                        token_type: string::utf8(b"USDC"),
+                        usdc_amount: emp.salary_usdc,
+                        apt_amount: 0,
                     });
                     
                     found = true;
@@ -812,8 +1141,16 @@ module paylance_addr::paylance {
         coin::value(&treasury.coins)
     }
 
+    // Simple USDC treasury balance view function
     #[view]
-    public fun get_total_active_payroll(company_address: address): u64 acquires Company {
+    public fun get_usdc_treasury_balance(company_address: address): u64 acquires USDC_Treasury {
+        assert!(exists<USDC_Treasury>(company_address), ECOMPANY_NOT_INITIALIZED);
+        let treasury = borrow_global<USDC_Treasury>(company_address);
+        treasury.usdc_balance
+    }
+
+    #[view]
+    public fun get_total_active_payroll_usdc(company_address: address): u64 acquires Company {
         assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
         let company = borrow_global<Company>(company_address);
         
@@ -823,7 +1160,26 @@ module paylance_addr::paylance {
         while (i < len) {
             let emp = vector::borrow(&company.employees, i);
             if (!emp.paused) {
-                total = total + emp.salary;
+                total = total + emp.salary_usdc;
+            };
+            i = i + 1;
+        };
+        total
+    }
+
+    #[view]
+    public fun get_total_active_payroll_apt(company_address: address): u64 acquires Company {
+        assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
+        let company = borrow_global<Company>(company_address);
+        
+        let total = 0;
+        let len = vector::length(&company.employees);
+        let i = 0;
+        while (i < len) {
+            let emp = vector::borrow(&company.employees, i);
+            if (!emp.paused) {
+                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                total = total + apt_amount;
             };
             i = i + 1;
         };

@@ -40,7 +40,7 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
       
       // Try to get the Company resource for this address
       const response = await fetch(
-        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${contractAddress}::paylance::Company`
+        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${contractAddress}::paylance_v7::Company`
       );
       
       if (response.ok) {
@@ -88,7 +88,7 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
     try {
       console.log('Creating company with:', {
         contractAddress,
-        function: `${contractAddress}::paylance::create_company`,
+        function: `${contractAddress}::paylance_v7::create_company`,
         companyName,
         companyEmail,
         registryAddress
@@ -98,7 +98,7 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::create_company`,
+          function: `${contractAddress}::paylance_v7::create_company`,
           functionArguments: [companyName, companyEmail, registryAddress],
         },
       };

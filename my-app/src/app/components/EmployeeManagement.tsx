@@ -13,10 +13,11 @@ interface Employee {
   email: string;
   wallet: string;
   role: string;
-  salary: number;
+  salary_usdc: number;
   paused: boolean;
   last_paid: number;
-  total_paid: number;
+  total_paid_usdc: number;
+  total_paid_apt: number;
 }
 
 export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contractAddress }) => {
@@ -33,7 +34,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
     email: '',
     wallet: '',
     role: '',
-    salary: ''
+    salary_usdc: ''
   });
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -46,7 +47,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
     email: '',
     wallet: '',
     role: '',
-    salary: '',
+    salary_usdc: '',
     paused: false
   });
 
@@ -70,7 +71,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       // Try to get the Company resource to check if it exists
       const companyResponse = await fetch(
-        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${contractAddress}::paylance::Company`
+        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${contractAddress}::paylance_v7::Company`
       );
       
       if (!companyResponse.ok) {
@@ -97,10 +98,11 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
           email: emp.email || 'Unknown',
           wallet: emp.wallet || 'Unknown',
           role: emp.role || 'Unknown',
-          salary: emp.salary || 0,
+          salary_usdc: emp.salary_usdc || 0,
           paused: emp.paused || false,
           last_paid: emp.last_paid || 0,
-          total_paid: emp.total_paid || 0
+          total_paid_usdc: emp.total_paid_usdc || 0,
+          total_paid_apt: emp.total_paid_apt || 0
         }));
         
         setEmployees(formattedEmployees);
@@ -136,7 +138,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       return;
     }
 
-    if (!newEmployee.name || !newEmployee.email || !newEmployee.wallet || !newEmployee.role || !newEmployee.salary) {
+    if (!newEmployee.name || !newEmployee.email || !newEmployee.wallet || !newEmployee.role || !newEmployee.salary_usdc) {
       setError('Please fill in all fields');
       return;
     }
@@ -146,26 +148,26 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
     setSuccess(null);
 
     try {
-      const salaryInOctas = Math.floor(Number(newEmployee.salary) * 100000000); // Convert to octas
+      const salaryInMicroUSDC = Math.floor(Number(newEmployee.salary_usdc) * 1000000); // Convert to micro-USDC (6 decimals)
       
       console.log('Adding employee with:', {
         contractAddress,
-        function: `${contractAddress}::paylance::add_employee`,
+        function: `${contractAddress}::paylance_v7::add_employee`,
         employeeData: newEmployee,
-        salaryInOctas
+        salaryInMicroUSDC
       });
 
       // Build transaction payload
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::add_employee`,
+          function: `${contractAddress}::paylance_v7::add_employee`,
           functionArguments: [
             newEmployee.name,
             newEmployee.email,
             newEmployee.wallet,
             newEmployee.role,
-            salaryInOctas.toString()
+            salaryInMicroUSDC.toString()
           ],
         },
       };
@@ -201,7 +203,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       email: employee.email,
       wallet: employee.wallet,
       role: employee.role,
-      salary: formatSalary(employee.salary),
+      salary_usdc: formatUSDC(employee.salary_usdc),
       paused: employee.paused
     });
     setIsEditModalOpen(true);
@@ -216,7 +218,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       email: '',
       wallet: '',
       role: '',
-      salary: '',
+      salary_usdc: '',
       paused: false
     });
   };
@@ -228,7 +230,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       email: '',
       wallet: '',
       role: '',
-      salary: ''
+      salary_usdc: ''
     });
     setIsAddModalOpen(true);
   };
@@ -241,7 +243,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       email: '',
       wallet: '',
       role: '',
-      salary: ''
+      salary_usdc: ''
     });
   };
 
@@ -257,17 +259,17 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
     setSuccess(null);
 
     try {
-      // Convert salary to octas
-      const salaryInOctas = Math.floor(Number(editFormData.salary) * 100000000);
+      // Convert salary to micro-USDC
+      const salaryInMicroUSDC = Math.floor(Number(editFormData.salary_usdc) * 1000000);
       
       console.log('Updating employee with single transaction:', {
         contractAddress,
-        function: `${contractAddress}::paylance::update_employee_complete`,
+        function: `${contractAddress}::paylance_v7::update_employee_complete`,
         employeeWallet: editingEmployee.wallet,
         newName: editFormData.name,
         newEmail: editFormData.email,
         newRole: editFormData.role,
-        newSalary: salaryInOctas,
+        newSalary: salaryInMicroUSDC,
         newWallet: editFormData.wallet,
         newPaused: editFormData.paused
       });
@@ -275,13 +277,13 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::update_employee_complete`,
+          function: `${contractAddress}::paylance_v7::update_employee_complete`,
           functionArguments: [
             editingEmployee.wallet,  // employee_wallet
             editFormData.name,       // new_name
             editFormData.email,      // new_email
             editFormData.role,       // new_role
-            salaryInOctas.toString(), // new_salary
+            salaryInMicroUSDC.toString(), // new_salary
             editFormData.wallet,    // new_wallet
             editFormData.paused     // new_paused
           ],
@@ -338,10 +340,10 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
           functionName = 'update_employee_role';
           functionArguments.push(newValue);
           break;
-        case 'salary':
+        case 'salary_usdc':
           functionName = 'update_employee_salary';
-          const salaryInOctas = Math.floor(Number(newValue) * 100000000);
-          functionArguments.push(salaryInOctas.toString());
+          const salaryInMicroUSDC = Math.floor(Number(newValue) * 1000000);
+          functionArguments.push(salaryInMicroUSDC.toString());
           break;
         case 'wallet':
           functionName = 'update_employee_wallet';
@@ -353,7 +355,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       console.log(`Updating employee ${field}:`, {
         contractAddress,
-        function: `${contractAddress}::paylance::${functionName}`,
+        function: `${contractAddress}::paylance_v7::${functionName}`,
         employeeWallet,
         newValue
       });
@@ -361,7 +363,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::${functionName}`,
+          function: `${contractAddress}::paylance_v7::${functionName}`,
           functionArguments,
         },
       };
@@ -400,14 +402,14 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
     try {
       console.log('Deleting employee:', {
         contractAddress,
-        function: `${contractAddress}::paylance::remove_employee`,
+        function: `${contractAddress}::paylance_v7::remove_employee`,
         employeeWallet
       });
 
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::remove_employee`,
+          function: `${contractAddress}::paylance_v7::remove_employee`,
           functionArguments: [employeeWallet],
         },
       };
@@ -448,7 +450,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       console.log('Toggling employee status:', {
         contractAddress,
-        function: `${contractAddress}::paylance::${functionName}`,
+        function: `${contractAddress}::paylance_v7::${functionName}`,
         employeeWallet,
         action: isPaused ? 'resume' : 'pause'
       });
@@ -456,7 +458,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::${functionName}`,
+          function: `${contractAddress}::paylance_v7::${functionName}`,
           functionArguments: [employeeWallet],
         },
       };
@@ -499,6 +501,10 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
 
   const formatSalary = (salary: number) => {
     return (salary / 100000000).toFixed(4); // Convert from octas to APT
+  };
+
+  const formatUSDC = (salary: number) => {
+    return (salary / 1000000).toFixed(2); // Convert from micro-USDC to USDC
   };
 
   return (
@@ -611,7 +617,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary (USDC)</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Wallet</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Paid</th>
@@ -631,7 +637,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
                           {employee.role}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatSalary(employee.salary)} APT
+                          {formatUSDC(employee.salary_usdc)} USDC
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
                           {formatAddress(employee.wallet)}
@@ -647,7 +653,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           <span className="text-gray-900 font-medium">
-                            {formatSalary(employee.total_paid)} APT
+                            {formatUSDC(employee.total_paid_usdc)} USDC
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -811,7 +817,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
 
                 {/* Monthly Salary */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary (APT)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary (USDC)</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -821,10 +827,10 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
                     <input
                       type="number"
                       step="0.01"
-                      value={editFormData.salary}
-                      onChange={(e) => setEditFormData({...editFormData, salary: e.target.value})}
+                      value={editFormData.salary_usdc}
+                      onChange={(e) => setEditFormData({...editFormData, salary_usdc: e.target.value})}
                       className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter salary in APT"
+                      placeholder="Enter salary in USDC"
                     />
                   </div>
                 </div>
@@ -973,7 +979,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
 
                 {/* Monthly Salary */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary (APT) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary (USDC) *</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -983,13 +989,13 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
                     <input
                       type="number"
                       step="0.01"
-                      value={newEmployee.salary}
-                      onChange={(e) => setNewEmployee({...newEmployee, salary: e.target.value})}
+                      value={newEmployee.salary_usdc}
+                      onChange={(e) => setNewEmployee({...newEmployee, salary_usdc: e.target.value})}
                       className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Enter salary in APT"
+                      placeholder="Enter salary in USDC"
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Enter salary in APT (e.g., 1.5 for 1.5 APT)</p>
+                  <p className="text-xs text-gray-500 mt-1">Enter salary in USDC (e.g., 100 for 100 USDC)</p>
                 </div>
               </div>
             </div>
@@ -1004,7 +1010,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
               </button>
               <button
                 onClick={handleAddEmployee}
-                disabled={isAddingEmployee || !account?.address || !newEmployee.name || !newEmployee.email || !newEmployee.wallet || !newEmployee.role || !newEmployee.salary}
+                disabled={isAddingEmployee || !account?.address || !newEmployee.name || !newEmployee.email || !newEmployee.wallet || !newEmployee.role || !newEmployee.salary_usdc}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAddingEmployee ? 'Adding...' : 'Add Employee'}

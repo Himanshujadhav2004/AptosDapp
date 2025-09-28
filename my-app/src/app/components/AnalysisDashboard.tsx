@@ -64,7 +64,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
       try {
         const employeesData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_all_employees`,
+            function: `${contractAddress}::paylance_v7::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -98,7 +98,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         
         const employeesData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_all_employees`,
+            function: `${contractAddress}::paylance_v7::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -143,7 +143,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
       try {
         const paymentLogsData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_all_payment_logs`,
+            function: `${contractAddress}::paylance_v7::get_all_payment_logs`,
             functionArguments: [addressString],
           },
         });
@@ -180,7 +180,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         
         const paymentLogsData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_all_payment_logs`,
+            function: `${contractAddress}::paylance_v7::get_all_payment_logs`,
             functionArguments: [addressString],
           },
         });

@@ -13,10 +13,11 @@ interface Employee {
   email: string;
   wallet: string;
   role: string;
-  salary: number;
+  salary_usdc: number;
   paused: boolean;
   last_paid: number;
-  total_paid: number;
+  total_paid_usdc: number;
+  total_paid_apt: number;
 }
 
 export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAddress }) => {
@@ -31,6 +32,43 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
   const [treasuryBalance, setTreasuryBalance] = useState<number>(0);
   const [isLoadingTreasury, setIsLoadingTreasury] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'single' | 'bulk'>('bulk');
+  const [paymentToken, setPaymentToken] = useState<'apt' | 'usdc'>('apt');
+  const [usdcTreasuryBalance, setUsdcTreasuryBalance] = useState<number>(0);
+  const [isLoadingUsdcTreasury, setIsLoadingUsdcTreasury] = useState(false);
+  const [aptToUsdRate, setAptToUsdRate] = useState<number>(10); // Default rate, should fetch from API
+
+  // Constants for decimal conversions
+  const APT_DECIMALS = 8;
+  const USDC_DECIMALS = 6;
+  const APT_DIVISOR = Math.pow(10, APT_DECIMALS); // 100,000,000
+  const USDC_DIVISOR = Math.pow(10, USDC_DECIMALS); // 1,000,000
+
+  // Helper function to convert USDC amount to APT equivalent
+  const convertUsdcToApt = (usdcAmount: number): number => {
+    return usdcAmount / aptToUsdRate;
+  };
+
+  // Helper function to format APT amounts
+  const formatAPT = (amountInOctas: number): string => {
+    return (amountInOctas / APT_DIVISOR).toFixed(6);
+  };
+
+  // Helper function to format USDC amounts
+  const formatUSDC = (amountInMicroUsdc: number): string => {
+    return (amountInMicroUsdc / USDC_DIVISOR).toFixed(2);
+  };
+
+  // Fetch APT to USD rate (you should implement this with a real API)
+  const fetchAptToUsdRate = async () => {
+    try {
+      // Replace with actual API call to get APT/USD rate
+      // For now using a mock rate
+      setAptToUsdRate(10); // Example: 1 APT = $10 USD
+    } catch (error) {
+      console.error('Failed to fetch APT rate:', error);
+      setAptToUsdRate(10); // Fallback rate
+    }
+  };
 
   // Fetch employees
   const fetchEmployees = async () => {
@@ -46,7 +84,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       try {
         const employeesData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_all_employees`,
+            function: `${contractAddress}::paylance_v7::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -57,10 +95,11 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
           email: emp.email || 'Unknown',
           wallet: emp.wallet || 'Unknown',
           role: emp.role || 'Unknown',
-          salary: emp.salary || 0,
+          salary_usdc: emp.salary_usdc || 0,
           paused: emp.paused || false,
           last_paid: emp.last_paid || 0,
-          total_paid: emp.total_paid || 0
+          total_paid_usdc: emp.total_paid_usdc || 0,
+          total_paid_apt: emp.total_paid_apt || 0
         }));
         
         setEmployees(formattedEmployees);
@@ -73,7 +112,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         
         const employeesData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_all_employees`,
+            function: `${contractAddress}::paylance_v7::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -84,10 +123,11 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
           email: emp.email || 'Unknown',
           wallet: emp.wallet || 'Unknown',
           role: emp.role || 'Unknown',
-          salary: emp.salary || 0,
+          salary_usdc: emp.salary_usdc || 0,
           paused: emp.paused || false,
           last_paid: emp.last_paid || 0,
-          total_paid: emp.total_paid || 0
+          total_paid_usdc: emp.total_paid_usdc || 0,
+          total_paid_apt: emp.total_paid_apt || 0
         }));
         
         setEmployees(formattedEmployees);
@@ -115,12 +155,12 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       try {
         const treasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
         
-        const balance = Number(treasuryBalance[0]) / 100000000; // Convert from Octas to APT
+        const balance = Number(treasuryBalance[0]) / APT_DIVISOR;
         setTreasuryBalance(balance);
       } catch (testnetError) {
         console.log("Testnet treasury fetch failed, trying mainnet...");
@@ -130,12 +170,12 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         
         const treasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
         
-        const balance = Number(treasuryBalance[0]) / 100000000; // Convert from Octas to APT
+        const balance = Number(treasuryBalance[0]) / APT_DIVISOR;
         setTreasuryBalance(balance);
       }
     } catch (err) {
@@ -143,6 +183,54 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       setTreasuryBalance(0);
     } finally {
       setIsLoadingTreasury(false);
+    }
+  };
+
+  // Fetch USDC treasury balance
+  const fetchUsdcTreasuryBalance = async () => {
+    if (!account?.address) return;
+
+    setIsLoadingUsdcTreasury(true);
+    try {
+      const addressString = account.address.toString();
+      
+      const testnetConfig = new AptosConfig({ network: Network.TESTNET });
+      const testnetAptos = new Aptos(testnetConfig);
+      
+      try {
+        const usdcTreasuryBalance = await testnetAptos.view({
+          payload: {
+            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            functionArguments: [addressString],
+          },
+        });
+        
+        const balance = Number(usdcTreasuryBalance[0]) / USDC_DIVISOR;
+        console.log(`Testnet USDC treasury balance: ${balance} USDC`);
+        setUsdcTreasuryBalance(balance);
+        return;
+      } catch (testnetError) {
+        console.log("Testnet USDC treasury balance fetch failed, trying mainnet...");
+        
+        const mainnetConfig = new AptosConfig({ network: Network.MAINNET });
+        const mainnetAptos = new Aptos(mainnetConfig);
+        
+        const usdcTreasuryBalance = await mainnetAptos.view({
+          payload: {
+            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            functionArguments: [addressString],
+          },
+        });
+        
+        const balance = Number(usdcTreasuryBalance[0]) / USDC_DIVISOR;
+        console.log(`Mainnet USDC treasury balance: ${balance} USDC`);
+        setUsdcTreasuryBalance(balance);
+      }
+    } catch (err) {
+      console.error("Error fetching USDC treasury balance:", err);
+      setUsdcTreasuryBalance(0);
+    } finally {
+      setIsLoadingUsdcTreasury(false);
     }
   };
 
@@ -158,22 +246,27 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
     setSuccess(null);
 
     try {
+      const functionName = paymentToken === 'apt' 
+        ? 'pay_single_employee_apt' 
+        : 'pay_single_employee_usdc';
+      
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::pay_single_employee`,
+          function: `${contractAddress}::paylance_v7::${functionName}`,
           functionArguments: [employeeWallet],
         },
       };
 
       const result = await signAndSubmitTransaction(transaction as any);
       
-      setSuccess(`Payment successful! Transaction: ${result.hash}`);
+      setSuccess(`Payment successful in ${paymentToken.toUpperCase()}! Transaction: ${result.hash}`);
       
       // Refresh data after successful payment
       setTimeout(() => {
         fetchEmployees();
         fetchTreasuryBalance();
+        fetchUsdcTreasuryBalance();
       }, 2000);
 
     } catch (err: any) {
@@ -211,22 +304,27 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       });
 
       // Single transaction to pay all selected employees
+      const functionName = paymentToken === 'apt' 
+        ? 'pay_selected_employees' 
+        : 'pay_selected_employees_usdc';
+      
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance::pay_selected_employees`,
+          function: `${contractAddress}::paylance_v7::${functionName}`,
           functionArguments: [selectedEmployeeWallets],
         },
       };
 
       const result = await signAndSubmitTransaction(transaction as any);
       
-      setSuccess(`Successfully paid ${selectedEmployeeWallets.length} employee(s) in a single transaction! Hash: ${result.hash}`);
+      setSuccess(`Successfully paid ${selectedEmployeeWallets.length} employee(s) in ${paymentToken.toUpperCase()}! Hash: ${result.hash}`);
       
       // Refresh data after successful payment
       setTimeout(() => {
         fetchEmployees();
         fetchTreasuryBalance();
+        fetchUsdcTreasuryBalance();
       }, 2000);
 
     } catch (err: any) {
@@ -260,16 +358,30 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
     setSelectedEmployees(new Set());
   };
 
-  // Calculate total payroll
+  // Calculate total payroll based on payment token
   const calculateTotalPayroll = () => {
-    return employees
-      .filter(emp => selectedEmployees.has(emp.wallet) && !emp.paused)
-      .reduce((total, emp) => total + (emp.salary / 100000000), 0);
+    const selectedEmployeeData = employees.filter(emp => selectedEmployees.has(emp.wallet) && !emp.paused);
+    
+    if (paymentToken === 'usdc') {
+      return selectedEmployeeData.reduce((total, emp) => total + (emp.salary_usdc / USDC_DIVISOR), 0);
+    } else {
+      // For APT, convert USDC salary to APT equivalent
+      return selectedEmployeeData.reduce((total, emp) => {
+        const usdcSalary = emp.salary_usdc / USDC_DIVISOR;
+        return total + convertUsdcToApt(usdcSalary);
+      }, 0);
+    }
   };
 
-  // Format salary
-  const formatSalary = (salary: number) => {
-    return (salary / 100000000).toFixed(4);
+  // Get display amount for employee based on payment token
+  const getEmployeeDisplayAmount = (employee: Employee) => {
+    if (paymentToken === 'usdc') {
+      return `${formatUSDC(employee.salary_usdc)} USDC`;
+    } else {
+      const usdcAmount = employee.salary_usdc / USDC_DIVISOR;
+      const aptAmount = convertUsdcToApt(usdcAmount);
+      return `${aptAmount.toFixed(6)} APT (≈${formatUSDC(employee.salary_usdc)} USD)`;
+    }
   };
 
   // Format address
@@ -282,8 +394,15 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
     if (account?.address) {
       fetchEmployees();
       fetchTreasuryBalance();
+      fetchUsdcTreasuryBalance();
+      fetchAptToUsdRate();
     }
   }, [account?.address]);
+
+  // Recalculate when payment token changes
+  useEffect(() => {
+    // Force re-render when payment token changes
+  }, [paymentToken, aptToUsdRate]);
 
   return (
     <div className="space-y-8">
@@ -311,33 +430,122 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         </button>
       </div>
 
+      {/* Payment Token Selection */}
+      <div className="bg-white rounded-lg p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Payment Method</h3>
+          <div className="text-sm text-gray-500">
+            APT Rate: $${aptToUsdRate.toFixed(2)} USD
+          </div>
+        </div>
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setPaymentToken('apt')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              paymentToken === 'apt'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+            </svg>
+            <span>Pay in APT</span>
+          </button>
+          <button
+            onClick={() => setPaymentToken('usdc')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              paymentToken === 'usdc'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+            </svg>
+            <span>Pay in USDC</span>
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">
+          {paymentToken === 'apt' 
+            ? `Employees will receive APT tokens converted from their USDC salary at $${aptToUsdRate.toFixed(2)} per APT`
+            : 'Employees will receive USDC tokens directly from their USDC salary'
+          }
+        </p>
+      </div>
+
       {/* Treasury Balance */}
       <div className="bg-gray-50 rounded-lg p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
             <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
             <span className="text-lg font-medium text-gray-700">Treasury Balance</span>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-gray-900">
-              {isLoadingTreasury ? (
-                <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-              ) : (
-                `${treasuryBalance.toFixed(4)} APT`
-              )}
-            </span>
-            <button
-              onClick={fetchTreasuryBalance}
-              disabled={isLoadingTreasury}
-              className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-              title="Refresh Treasury Balance"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* APT Balance */}
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+                <span className="text-sm font-medium text-gray-700">APT</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-lg font-bold text-gray-900">
+                  {isLoadingTreasury ? (
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                  ) : (
+                    `${treasuryBalance.toFixed(6)} APT`
+                  )}
+                </span>
+                <button
+                  onClick={fetchTreasuryBalance}
+                  disabled={isLoadingTreasury}
+                  className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  title="Refresh APT Treasury Balance"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* USDC Balance */}
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+                <span className="text-sm font-medium text-purple-700">USDC</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-lg font-bold text-purple-900">
+                  {isLoadingUsdcTreasury ? (
+                    <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
+                  ) : (
+                    `${usdcTreasuryBalance.toFixed(2)} USDC`
+                  )}
+                </span>
+                <button
+                  onClick={fetchUsdcTreasuryBalance}
+                  disabled={isLoadingUsdcTreasury}
+                  className="p-1 text-purple-500 hover:text-purple-700 disabled:opacity-50"
+                  title="Refresh USDC Treasury Balance"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -497,18 +705,18 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
                     <div className="flex items-center space-x-4">
                       <div className="text-right">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-700">Amount</span>
-                          {paymentMode === 'bulk' && (
-                            <button className="p-1 text-gray-400 hover:text-gray-600">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                          )}
+                          <span className="text-sm font-medium text-gray-700">
+                            {paymentToken === 'apt' ? 'Will Pay' : 'Amount'}
+                          </span>
                         </div>
                         <p className="text-lg font-semibold text-gray-900">
-                          {formatSalary(employee.salary)} APT
+                          {getEmployeeDisplayAmount(employee)}
                         </p>
+                        {paymentToken === 'apt' && (
+                          <p className="text-xs text-gray-500">
+                            Base: {formatUSDC(employee.salary_usdc)} USDC
+                          </p>
+                        )}
                       </div>
 
                       {paymentMode === 'single' && (
@@ -517,7 +725,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
                           disabled={isPaying || employee.paused}
                           className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isPaying ? 'Paying...' : 'Pay Now'}
+                          {isPaying ? 'Paying...' : `Pay in ${paymentToken.toUpperCase()}`}
                         </button>
                       )}
                     </div>
@@ -535,9 +743,19 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Payment Summary</h3>
-              <p className="text-sm text-gray-600">
-                Send {calculateTotalPayroll().toFixed(4)} APT to {selectedEmployees.size} recipients
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-gray-600">
+                  Total Amount: <span className="font-semibold">{calculateTotalPayroll().toFixed(paymentToken === 'apt' ? 6 : 2)} {paymentToken.toUpperCase()}</span>
+                </p>
+                <p className="text-sm text-gray-600">
+                  Recipients: <span className="font-semibold">{selectedEmployees.size} employee(s)</span>
+                </p>
+                {paymentToken === 'apt' && (
+                  <p className="text-xs text-gray-500">
+                    Rate: 1 APT = ${aptToUsdRate.toFixed(2)} USD
+                  </p>
+                )}
+              </div>
             </div>
             <button
               onClick={paySelectedEmployees}
@@ -548,9 +766,29 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
               </svg>
               <span>
-                {isPaying ? 'Processing...' : `Send ${calculateTotalPayroll().toFixed(4)} APT to ${selectedEmployees.size} Recipients`}
+                {isPaying 
+                  ? 'Processing...' 
+                  : `Pay ${calculateTotalPayroll().toFixed(paymentToken === 'apt' ? 6 : 2)} ${paymentToken.toUpperCase()}`
+                }
               </span>
             </button>
+          </div>
+          
+          {/* Payment Verification */}
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-start space-x-2">
+              <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-xs text-blue-800">
+                <p className="font-medium mb-1">Payment Details:</p>
+                {paymentToken === 'apt' ? (
+                  <p>Converting USDC salaries to APT at current rate. Employees will receive the APT equivalent of their USDC salary.</p>
+                ) : (
+                  <p>Employees will receive their exact USDC salary amount.</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
