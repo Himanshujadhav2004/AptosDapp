@@ -1,5 +1,5 @@
 script {
-    use paylance_addr::paylance_v10;
+    use paylance_addr::paylance_v12;
     use std::string;
     use std::signer;
     use std::debug;
@@ -17,7 +17,7 @@ script {
         let email = string::utf8(company_email);
         
         // Create the company
-        paylance_v10::create_company(admin, name, email, registry_address);
+        paylance_v12::create_company(admin, name, email, registry_address);
         
         debug::print(&b"Company created successfully!");
         debug::print(&signer::address_of(admin));

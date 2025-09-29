@@ -29,13 +29,10 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [paymentProgress, setPaymentProgress] = useState<{current: number, total: number, currentEmployee: string} | null>(null);
-  const [treasuryBalance, setTreasuryBalance] = useState<number>(0);
-  const [isLoadingTreasury, setIsLoadingTreasury] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'single' | 'bulk'>('bulk');
   const [paymentToken, setPaymentToken] = useState<'apt' | 'usdc'>('apt');
-  const [usdcTreasuryBalance, setUsdcTreasuryBalance] = useState<number>(0);
-  const [isLoadingUsdcTreasury, setIsLoadingUsdcTreasury] = useState(false);
-  const [aptToUsdRate, setAptToUsdRate] = useState<number>(10); // Default rate, should fetch from API
+  const [aptToUsdRate, setAptToUsdRate] = useState<number>(10); // Default rate, fetched from API
+  const [isLoadingPrice, setIsLoadingPrice] = useState<boolean>(false);
 
   // Constants for decimal conversions
   const APT_DECIMALS = 8;
@@ -58,15 +55,43 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
     return (amountInMicroUsdc / USDC_DIVISOR).toFixed(2);
   };
 
-  // Fetch APT to USD rate (you should implement this with a real API)
+  // Fetch APT to USD rate from CoinGecko API
   const fetchAptToUsdRate = async () => {
+    setIsLoadingPrice(true);
     try {
-      // Replace with actual API call to get APT/USD rate
-      // For now using a mock rate
-      setAptToUsdRate(10); // Example: 1 APT = $10 USD
+      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=aptos&vs_currencies=usd');
+      const data = await response.json();
+      
+      if (data.aptos && data.aptos.usd) {
+        setAptToUsdRate(data.aptos.usd);
+        console.log('Fetched APT price:', data.aptos.usd);
+      } else {
+        throw new Error('Invalid API response');
+      }
     } catch (error) {
       console.error('Failed to fetch APT rate:', error);
-      setAptToUsdRate(10); // Fallback rate
+      // Fallback to contract's price estimate
+      try {
+        const testnetConfig = new AptosConfig({ network: Network.TESTNET });
+        const testnetAptos = new Aptos(testnetConfig);
+        
+        const priceData = await testnetAptos.view({
+          payload: {
+            function: `${contractAddress}::paylance_v12::get_apt_price_estimate_usd`,
+            functionArguments: [],
+          },
+        });
+        
+        const priceInOctas = Number(priceData[0]);
+        const priceInUsd = priceInOctas / Math.pow(10, 8); // Convert from 8 decimals
+        setAptToUsdRate(priceInUsd);
+        console.log('Using contract price estimate:', priceInUsd);
+      } catch (contractError) {
+        console.error('Failed to fetch contract price estimate:', contractError);
+        setAptToUsdRate(10); // Final fallback
+      }
+    } finally {
+      setIsLoadingPrice(false);
     }
   };
 
@@ -84,7 +109,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       try {
         const employeesData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_all_employees`,
+            function: `${contractAddress}::paylance_v12::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -112,7 +137,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         
         const employeesData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_all_employees`,
+            function: `${contractAddress}::paylance_v12::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -141,96 +166,12 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
     }
   };
 
-  // Fetch treasury balance
-  const fetchTreasuryBalance = async () => {
-    if (!account?.address) return;
-
-    setIsLoadingTreasury(true);
+  // Dispatch a custom event to notify other components (e.g., Navbar) to refresh balances
+  const notifyTreasuryRefresh = () => {
     try {
-      const addressString = account.address.toString();
-      
-      const testnetConfig = new AptosConfig({ network: Network.TESTNET });
-      const testnetAptos = new Aptos(testnetConfig);
-      
-      try {
-        const treasuryBalance = await testnetAptos.view({
-          payload: {
-            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
-            functionArguments: [addressString],
-          },
-        });
-        
-        const balance = Number(treasuryBalance[0]) / APT_DIVISOR;
-        setTreasuryBalance(balance);
-      } catch (testnetError) {
-        console.log("Testnet treasury fetch failed, trying mainnet...");
-        
-        const mainnetConfig = new AptosConfig({ network: Network.MAINNET });
-        const mainnetAptos = new Aptos(mainnetConfig);
-        
-        const treasuryBalance = await mainnetAptos.view({
-          payload: {
-            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
-            functionArguments: [addressString],
-          },
-        });
-        
-        const balance = Number(treasuryBalance[0]) / APT_DIVISOR;
-        setTreasuryBalance(balance);
-      }
-    } catch (err) {
-      console.error("Error fetching treasury balance:", err);
-      setTreasuryBalance(0);
-    } finally {
-      setIsLoadingTreasury(false);
-    }
-  };
-
-  // Fetch USDC treasury balance
-  const fetchUsdcTreasuryBalance = async () => {
-    if (!account?.address) return;
-
-    setIsLoadingUsdcTreasury(true);
-    try {
-      const addressString = account.address.toString();
-      
-      const testnetConfig = new AptosConfig({ network: Network.TESTNET });
-      const testnetAptos = new Aptos(testnetConfig);
-      
-      try {
-        const usdcTreasuryBalance = await testnetAptos.view({
-          payload: {
-            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
-            functionArguments: [addressString],
-          },
-        });
-        
-        const balance = Number(usdcTreasuryBalance[0]) / USDC_DIVISOR;
-        console.log(`Testnet USDC treasury balance: ${balance} USDC`);
-        setUsdcTreasuryBalance(balance);
-        return;
-      } catch (testnetError) {
-        console.log("Testnet USDC treasury balance fetch failed, trying mainnet...");
-        
-        const mainnetConfig = new AptosConfig({ network: Network.MAINNET });
-        const mainnetAptos = new Aptos(mainnetConfig);
-        
-        const usdcTreasuryBalance = await mainnetAptos.view({
-          payload: {
-            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
-            functionArguments: [addressString],
-          },
-        });
-        
-        const balance = Number(usdcTreasuryBalance[0]) / USDC_DIVISOR;
-        console.log(`Mainnet USDC treasury balance: ${balance} USDC`);
-        setUsdcTreasuryBalance(balance);
-      }
-    } catch (err) {
-      console.error("Error fetching USDC treasury balance:", err);
-      setUsdcTreasuryBalance(0);
-    } finally {
-      setIsLoadingUsdcTreasury(false);
+      window.dispatchEvent(new CustomEvent('treasury:refresh'));
+    } catch (_) {
+      // no-op on server
     }
   };
 
@@ -253,7 +194,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v10::${functionName}`,
+          function: `${contractAddress}::paylance_v12::${functionName}`,
           functionArguments: [employeeWallet],
         },
       };
@@ -262,11 +203,10 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       
       setSuccess(`Payment successful in ${paymentToken.toUpperCase()}! Transaction: ${result.hash}`);
       
-      // Refresh data after successful payment
+      // Refresh employees locally and notify Navbar to refresh treasury balances
       setTimeout(() => {
         fetchEmployees();
-        fetchTreasuryBalance();
-        fetchUsdcTreasuryBalance();
+        notifyTreasuryRefresh();
       }, 2000);
 
     } catch (err: any) {
@@ -311,7 +251,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v10::${functionName}`,
+          function: `${contractAddress}::paylance_v12::${functionName}`,
           functionArguments: [selectedEmployeeWallets],
         },
       };
@@ -320,11 +260,10 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       
       setSuccess(`Successfully paid ${selectedEmployeeWallets.length} employee(s) in ${paymentToken.toUpperCase()}! Hash: ${result.hash}`);
       
-      // Refresh data after successful payment
+      // Refresh employees locally and notify Navbar to refresh treasury balances
       setTimeout(() => {
         fetchEmployees();
-        fetchTreasuryBalance();
-        fetchUsdcTreasuryBalance();
+        notifyTreasuryRefresh();
       }, 2000);
 
     } catch (err: any) {
@@ -393,8 +332,6 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
   useEffect(() => {
     if (account?.address) {
       fetchEmployees();
-      fetchTreasuryBalance();
-      fetchUsdcTreasuryBalance();
       fetchAptToUsdRate();
     }
   }, [account?.address]);
@@ -434,8 +371,20 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       <div className="bg-white rounded-lg p-6 border border-gray-200">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">Payment Method</h3>
-          <div className="text-sm text-gray-500">
-            APT Rate: $${aptToUsdRate.toFixed(2)} USD
+          <div className="flex items-center space-x-3">
+            <div className="text-sm text-gray-500">
+              APT Rate: $${aptToUsdRate.toFixed(2)} USD
+            </div>
+            <button
+              onClick={fetchAptToUsdRate}
+              disabled={isLoadingPrice}
+              className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+              title="Refresh APT Price"
+            >
+              <svg className={`w-4 h-4 ${isLoadingPrice ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
           </div>
         </div>
         <div className="flex space-x-4">
@@ -468,87 +417,13 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         </div>
         <p className="text-sm text-gray-500 mt-2">
           {paymentToken === 'apt' 
-            ? `Employees will receive APT tokens converted from their USDC salary at $${aptToUsdRate.toFixed(2)} per APT`
+            ? `Employees will receive APT tokens converted from their USDC salary using real-time Oracle pricing (currently $${aptToUsdRate.toFixed(2)} per APT)`
             : 'Employees will receive USDC tokens directly from their USDC salary'
           }
         </p>
       </div>
 
-      {/* Treasury Balance */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-            <span className="text-lg font-medium text-gray-700">Treasury Balance</span>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* APT Balance */}
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-                <span className="text-sm font-medium text-gray-700">APT</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-lg font-bold text-gray-900">
-                  {isLoadingTreasury ? (
-                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                  ) : (
-                    `${treasuryBalance.toFixed(6)} APT`
-                  )}
-                </span>
-                <button
-                  onClick={fetchTreasuryBalance}
-                  disabled={isLoadingTreasury}
-                  className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                  title="Refresh APT Treasury Balance"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* USDC Balance */}
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                </svg>
-                <span className="text-sm font-medium text-purple-700">USDC</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-lg font-bold text-purple-900">
-                  {isLoadingUsdcTreasury ? (
-                    <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
-                  ) : (
-                    `${usdcTreasuryBalance.toFixed(2)} USDC`
-                  )}
-                </span>
-                <button
-                  onClick={fetchUsdcTreasuryBalance}
-                  disabled={isLoadingUsdcTreasury}
-                  className="p-1 text-purple-500 hover:text-purple-700 disabled:opacity-50"
-                  title="Refresh USDC Treasury Balance"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Treasury Balance removed (Navbar shows balances) */}
 
       {/* Payment Progress */}
       {paymentProgress && (
@@ -783,7 +658,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
               <div className="text-xs text-blue-800">
                 <p className="font-medium mb-1">Payment Details:</p>
                 {paymentToken === 'apt' ? (
-                  <p>Converting USDC salaries to APT at current rate. Employees will receive the APT equivalent of their USDC salary.</p>
+                  <p>Converting USDC salaries to APT using Chainlink Oracle price feeds for accurate real-time conversion. Employees will receive the APT equivalent of their USDC salary.</p>
                 ) : (
                   <p>Employees will receive their exact USDC salary amount.</p>
                 )}

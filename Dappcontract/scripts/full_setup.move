@@ -1,5 +1,5 @@
 script {
-    use paylance_addr::paylance_v10;
+    use paylance_addr::paylance_v12;
     use std::string;
     use std::signer;
     use std::debug;
@@ -28,10 +28,10 @@ script {
         // Create company
         let company_name_str = string::utf8(company_name);
         let company_email_str = string::utf8(company_email);
-        paylance_v10::create_company(admin, company_name_str, company_email_str, registry_address);
+        paylance_v12::create_company(admin, company_name_str, company_email_str, registry_address);
         
         // Add first employee
-        paylance_v10::add_employee(
+        paylance_v12::add_employee(
             admin,
             string::utf8(emp1_name),
             string::utf8(emp1_email),
@@ -41,7 +41,7 @@ script {
         );
         
         // Add second employee
-        paylance_v10::add_employee(
+        paylance_v12::add_employee(
             admin,
             string::utf8(emp2_name),
             string::utf8(emp2_email),

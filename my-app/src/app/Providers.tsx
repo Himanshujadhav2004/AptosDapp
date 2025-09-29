@@ -10,8 +10,7 @@ const queryClient = new QueryClient();
 export default function Providers({ children }: PropsWithChildren) {
   return (
     <AptosWalletAdapterProvider
-      plugins={[]}
-      autoConnect={false}
+      autoConnect={true}
       onError={(error) => {
         // Silently handle wallet errors to prevent crashes
         console.warn('Wallet adapter error (handled):', error?.message || error);

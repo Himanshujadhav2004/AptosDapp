@@ -1,5 +1,5 @@
 // Paylance Payroll System - Move Implementation with USDC Support
-module paylance_addr::paylance_v10 {
+module paylance_addr::paylance_v12 {
     use std::string::{Self, String};
     use std::vector;
     use std::signer;
@@ -13,8 +13,15 @@ module paylance_addr::paylance_v10 {
     use aptos_framework::object::{Self, Object, ExtendRef};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::dispatchable_fungible_asset;
-    // Note: Pyth integration will be implemented with proper price feed access
-    // For now, we'll use a simplified approach with manual price conversion
+    // Chainlink Data Feeds on Aptos
+    use data_feeds::router::get_benchmarks;
+    use data_feeds::registry::{Benchmark, get_benchmark_value};
+
+    // Chainlink Feed IDs (Aptos Testnet)
+    // APT / USD
+    const APT_USD_PRICE_FEED_ID: vector<u8> = x"011e22d6bf000332000000000000000000000000000000000000000000000000";
+    // USDC / USD
+    const USDC_USD_PRICE_FEED_ID: vector<u8> = x"01a80ff216000332000000000000000000000000000000000000000000000000";
 
     // Error codes
     const ENOT_ADMIN: u64 = 1;
@@ -645,24 +652,54 @@ module paylance_addr::paylance_v10 {
         dispatchable_fungible_asset::deposit(company.usdc_store, fa);
     }
 
-    // Price conversion helper functions
-    // Note: These functions will be updated to use Pyth price feeds in production
-    // For now, using simplified conversion logic
+    // Price conversion helper functions using Chainlink Data Feeds
     
-    // Simplified APT price (example: $10 per APT)
-    public fun get_apt_price(): u64 {
-        1000000000 // $10.00 in 8 decimals
+    // Helper: integer power
+    fun pow(base: u64, exp: u64): u64 {
+        if (exp == 0) {
+            1
+        } else {
+            let result = base;
+            let i = 1;
+            while (i < exp) {
+                result = result * base;
+                i = i + 1;
+            };
+            result
+        }
     }
 
-    // Simplified USDC price (example: $1 per USDC)
-    public fun get_usdc_price(): u64 {
-        100000000 // $1.00 in 8 decimals
+    // Fetch a single benchmark price (18 decimal places) for a given feed id
+    fun get_feed_price_18(account: &signer, feed_id: vector<u8>): u256 {
+        let feed_ids = vector[feed_id];
+        let billing_data: vector<u8> = vector[];
+        let mut_benchmarks: vector<Benchmark> = get_benchmarks(account, feed_ids, billing_data);
+        let benchmark = vector::pop_back(&mut mut_benchmarks);
+        get_benchmark_value(&benchmark)
+    }
+
+    // Convert 18-decimal u256 price to 8-decimal u64 price (by dividing 1e10)
+    fun to_u64_8_decimals(price_18: u256): u64 {
+        let scale_down: u256 = (10000000000 as u256); // 1e10
+        (price_18 / scale_down) as u64
+    }
+
+    // APT price from Chainlink (returns 8-decimal USD)
+    fun get_apt_price_8(account: &signer): u64 {
+        let p18 = get_feed_price_18(account, APT_USD_PRICE_FEED_ID);
+        to_u64_8_decimals(p18)
+    }
+
+    // USDC price from Chainlink (returns 8-decimal USD)
+    fun get_usdc_price_8(account: &signer): u64 {
+        let p18 = get_feed_price_18(account, USDC_USD_PRICE_FEED_ID);
+        to_u64_8_decimals(p18)
     }
 
     // Convert USDC amount (6 decimals) to APT amount (8 decimals) using simplified pricing
-    public fun convert_usdc_to_apt(usdc_amount: u64): u64 {
-        let apt_price = get_apt_price(); // 8-decimal USD price
-        let usdc_price = get_usdc_price(); // 8-decimal USD price
+    public fun convert_usdc_to_apt(account: &signer, usdc_amount: u64): u64 {
+        let apt_price = get_apt_price_8(account); // 8-decimal USD price
+        let usdc_price = get_usdc_price_8(account); // 8-decimal USD price
 
         // Normalize USDC from 6->8 decimals by multiplying by 100
         // Formula: (usdc_amount_6 * 100 * usdc_price_8) / apt_price_8 => apt_amount_8
@@ -673,9 +710,9 @@ module paylance_addr::paylance_v10 {
     }
 
     // Convert APT amount (8 decimals) to USDC amount (6 decimals) using simplified pricing
-    public fun convert_apt_to_usdc(apt_amount: u64): u64 {
-        let apt_price = get_apt_price(); // 8-decimal USD price
-        let usdc_price = get_usdc_price(); // 8-decimal USD price
+    public fun convert_apt_to_usdc(account: &signer, apt_amount: u64): u64 {
+        let apt_price = get_apt_price_8(account); // 8-decimal USD price
+        let usdc_price = get_usdc_price_8(account); // 8-decimal USD price
 
         // First get 8-decimal USDC-equivalent amount: (apt_amount_8 * apt_price_8) / usdc_price_8
         let usdc_8 = (apt_amount * apt_price) / usdc_price;
@@ -769,8 +806,8 @@ module paylance_addr::paylance_v10 {
             if (emp.wallet == employee_wallet) {
                 assert!(!emp.paused, EEMPLOYEE_PAUSED);
                 
-                // Convert USDC salary to APT amount using Pyth price feeds
-                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                // Convert USDC salary to APT amount using Chainlink price feeds
+                let apt_amount = convert_usdc_to_apt(admin, emp.salary_usdc);
                 
                 // Check APT treasury balance
                 let treasury = borrow_global_mut<Treasury<AptosCoin>>(admin_addr);
@@ -895,7 +932,7 @@ module paylance_addr::paylance_v10 {
         while (i < len) {
             let emp = vector::borrow(&company.employees, i);
             if (!emp.paused) {
-                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                let apt_amount = convert_usdc_to_apt(admin, emp.salary_usdc);
                 total_apt_payroll = total_apt_payroll + apt_amount;
             };
             i = i + 1;
@@ -910,7 +947,7 @@ module paylance_addr::paylance_v10 {
         while (i < len) {
             let emp = vector::borrow_mut(&mut company.employees, i);
             if (!emp.paused) {
-                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                let apt_amount = convert_usdc_to_apt(admin, emp.salary_usdc);
                 let payment = coin::extract(&mut treasury.coins, apt_amount);
                 coin::deposit(emp.wallet, payment);
                 
@@ -973,7 +1010,7 @@ module paylance_addr::paylance_v10 {
                     assert!(!emp.paused, EEMPLOYEE_PAUSED);
                     
                     // Convert USDC salary to APT amount
-                    let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                    let apt_amount = convert_usdc_to_apt(admin, emp.salary_usdc);
                     
                     // Check treasury balance for this employee
                     assert!(coin::value(&treasury.coins) >= apt_amount, EINSUFFICIENT_BALANCE);
@@ -1141,6 +1178,16 @@ module paylance_addr::paylance_v10 {
         fungible_asset::balance(company.usdc_store)
     }
 
+    // Public view function to get a reasonable APT price estimate (8 decimal places)
+    // This returns a static value for frontend display purposes
+    // The actual Oracle conversion happens during payment execution
+    #[view]
+    public fun get_apt_price_estimate_usd(): u64 {
+        // Return $10.00 in 8 decimal places (1000000000)
+        // This is just for frontend display - actual Oracle price is used during payments
+        1000000000
+    }
+
     #[view]
     public fun get_total_active_payroll_usdc(company_address: address): u64 acquires Company {
         assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
@@ -1159,8 +1206,7 @@ module paylance_addr::paylance_v10 {
         total
     }
 
-    #[view]
-    public fun get_total_active_payroll_apt(company_address: address): u64 acquires Company {
+    public fun get_total_active_payroll_apt(account: &signer, company_address: address): u64 acquires Company {
         assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
         let company = borrow_global<Company>(company_address);
         
@@ -1170,7 +1216,7 @@ module paylance_addr::paylance_v10 {
         while (i < len) {
             let emp = vector::borrow(&company.employees, i);
             if (!emp.paused) {
-                let apt_amount = convert_usdc_to_apt(emp.salary_usdc);
+                let apt_amount = convert_usdc_to_apt(account, emp.salary_usdc);
                 total = total + apt_amount;
             };
             i = i + 1;

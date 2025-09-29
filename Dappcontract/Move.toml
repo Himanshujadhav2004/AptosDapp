@@ -1,17 +1,30 @@
 [package]
-name = "dappcontractV10"
+name = "dappcontractV12"
 version = "1.0.0"
 authors = []
 
 [addresses]
-paylance_addr= "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
+paylance_addr = "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
+owner = "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
+data_feeds = "0xf1099f135ddddad1c065203431be328a408b0ca452ada70374ce26bd2b32fdd3"
+platform = "0x516e771e1b4a903afe74c27d057c65849ecc1383782f6642d7ff21425f4f9c99"
+move_stdlib = "0x1"
+aptos_std = "0x1"
 
 [dev-addresses]
-paylance_addr= "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
+paylance_addr = "0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994"
 
 [dependencies.AptosFramework]
-git = "https://github.com/aptos-labs/aptos-framework.git"
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/aptos-framework"
 rev = "mainnet"
-subdir = "aptos-framework"
+
+[dependencies.MoveStdlib]
+git = "https://github.com/aptos-labs/aptos-core.git"
+subdir = "aptos-move/framework/move-stdlib"
+rev = "mainnet"
+
+[dependencies.ChainlinkDataFeeds]
+local = "./ChainlinkDataFeeds"
 
 [dev-dependencies]

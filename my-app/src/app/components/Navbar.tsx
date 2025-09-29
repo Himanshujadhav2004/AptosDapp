@@ -95,7 +95,7 @@ export const Navbar = () => {
       const transaction = {
         sender: addressString,
         data: {
-          function: `${contractAddress}::paylance_v10::deposit_apt`,
+          function: `${contractAddress}::paylance_v12::deposit_apt`,
           functionArguments: [amountInOctas.toString()],
         },
       };
@@ -150,7 +150,7 @@ export const Navbar = () => {
       try {
         await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_company_info`,
+            function: `${contractAddress}::paylance_v12::get_company_info`,
             functionArguments: [addressString],
           },
         });
@@ -184,7 +184,7 @@ export const Navbar = () => {
       const transaction = {
         sender: addressString,
         data: {
-          function: `${contractAddress}::paylance_v10::deposit_usdc`,
+          function: `${contractAddress}::paylance_v12::deposit_usdc`,
           functionArguments: [amountInMicroUSDC.toString()],
         },
       };
@@ -360,7 +360,7 @@ export const Navbar = () => {
       try {
         const treasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v12::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -378,7 +378,7 @@ export const Navbar = () => {
         
         const treasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v12::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -411,7 +411,7 @@ export const Navbar = () => {
       try {
         const usdcTreasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
+            function: `${contractAddress}::paylance_v12::get_usdc_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -429,7 +429,7 @@ export const Navbar = () => {
         
         const usdcTreasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
+            function: `${contractAddress}::paylance_v12::get_usdc_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -455,6 +455,18 @@ export const Navbar = () => {
       setBalance(0);
       setUsdcTreasuryBalance(0);
     }
+  }, [connected, account?.address]);
+
+  // Listen for external refresh requests (e.g., from PayrollManagement after payments)
+  useEffect(() => {
+    const onRefresh = () => {
+      if (connected && account?.address) {
+        fetchTreasuryBalance();
+        fetchUSDCTreasuryBalance();
+      }
+    };
+    window.addEventListener('treasury:refresh', onRefresh);
+    return () => window.removeEventListener('treasury:refresh', onRefresh);
   }, [connected, account?.address]);
 
   return (
@@ -895,6 +907,26 @@ export const Navbar = () => {
                       />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">Enter amount in USDC (e.g., 100 for 100 USDC)</p>
+                    {/* Simple preview from sender's perspective */}
+                    {(() => {
+                      const amount = Number(usdcDepositAmount);
+                      if (!isNaN(amount) && amount > 0) {
+                        return (
+                          <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-3">
+                            <div className="text-xs font-medium text-purple-900 mb-2">Preview (from your perspective)</div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-gray-700">Your USDC</span>
+                              <span className="font-semibold text-red-600">-{amount.toFixed(2)} USDC</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm mt-1">
+                              <span className="text-gray-700">Treasury USDC</span>
+                              <span className="font-semibold text-green-600">+{amount.toFixed(2)} USDC</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </>
                 )}
               </div>
