@@ -71,7 +71,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       // Try to get the Company resource to check if it exists
       const companyResponse = await fetch(
-        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${contractAddress}::paylance_v7::Company`
+        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${contractAddress}::paylance_v10::Company`
       );
       
       if (!companyResponse.ok) {
@@ -152,7 +152,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       console.log('Adding employee with:', {
         contractAddress,
-        function: `${contractAddress}::paylance_v7::add_employee`,
+        function: `${contractAddress}::paylance_v10::add_employee`,
         employeeData: newEmployee,
         salaryInMicroUSDC
       });
@@ -161,7 +161,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::add_employee`,
+          function: `${contractAddress}::paylance_v10::add_employee`,
           functionArguments: [
             newEmployee.name,
             newEmployee.email,
@@ -264,7 +264,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       console.log('Updating employee with single transaction:', {
         contractAddress,
-        function: `${contractAddress}::paylance_v7::update_employee_complete`,
+        function: `${contractAddress}::paylance_v10::update_employee_complete`,
         employeeWallet: editingEmployee.wallet,
         newName: editFormData.name,
         newEmail: editFormData.email,
@@ -277,7 +277,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::update_employee_complete`,
+          function: `${contractAddress}::paylance_v10::update_employee_complete`,
           functionArguments: [
             editingEmployee.wallet,  // employee_wallet
             editFormData.name,       // new_name
@@ -355,7 +355,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       console.log(`Updating employee ${field}:`, {
         contractAddress,
-        function: `${contractAddress}::paylance_v7::${functionName}`,
+        function: `${contractAddress}::paylance_v10::${functionName}`,
         employeeWallet,
         newValue
       });
@@ -363,7 +363,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::${functionName}`,
+          function: `${contractAddress}::paylance_v10::${functionName}`,
           functionArguments,
         },
       };
@@ -402,14 +402,14 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
     try {
       console.log('Deleting employee:', {
         contractAddress,
-        function: `${contractAddress}::paylance_v7::remove_employee`,
+        function: `${contractAddress}::paylance_v10::remove_employee`,
         employeeWallet
       });
 
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::remove_employee`,
+          function: `${contractAddress}::paylance_v10::remove_employee`,
           functionArguments: [employeeWallet],
         },
       };
@@ -450,7 +450,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       
       console.log('Toggling employee status:', {
         contractAddress,
-        function: `${contractAddress}::paylance_v7::${functionName}`,
+        function: `${contractAddress}::paylance_v10::${functionName}`,
         employeeWallet,
         action: isPaused ? 'resume' : 'pause'
       });
@@ -458,7 +458,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({ contract
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::${functionName}`,
+          function: `${contractAddress}::paylance_v10::${functionName}`,
           functionArguments: [employeeWallet],
         },
       };

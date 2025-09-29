@@ -1,5 +1,5 @@
 script {
-    use paylance_addr::paylance_v7;
+    use paylance_addr::paylance_v10;
     use std::string;
     use std::signer;
     use std::debug;
@@ -9,7 +9,7 @@ script {
         let admin_addr = signer::address_of(admin);
         
         // Create demo company
-        paylance_v7::create_company(
+        paylance_v10::create_company(
             admin, 
             string::utf8(b"Demo Tech Corp"),
             string::utf8(b"admin@demotechcorp.com"),
@@ -17,7 +17,7 @@ script {
         );
         
         // Add demo employees (you'll need real addresses for testing)
-        paylance_v7::add_employee(
+        paylance_v10::add_employee(
             admin,
             string::utf8(b"Alice Johnson"),
             string::utf8(b"alice@demotechcorp.com"),
@@ -26,7 +26,7 @@ script {
             150000000 // 1.5 APT (in octas)
         );
         
-        paylance_v7::add_employee(
+        paylance_v10::add_employee(
             admin,
             string::utf8(b"Bob Smith"),
             string::utf8(b"bob@demotechcorp.com"),
@@ -36,7 +36,7 @@ script {
         );
         
         // Deposit initial funds (5 APT)
-        paylance_v7::deposit_apt(admin, 500000000);
+        paylance_v10::deposit_apt(admin, 500000000);
         
         debug::print(&b"Demo setup completed with sample company and employees!");
         debug::print(&admin_addr);

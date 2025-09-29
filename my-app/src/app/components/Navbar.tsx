@@ -95,7 +95,7 @@ export const Navbar = () => {
       const transaction = {
         sender: addressString,
         data: {
-          function: `${contractAddress}::paylance_v7::deposit_apt`,
+          function: `${contractAddress}::paylance_v10::deposit_apt`,
           functionArguments: [amountInOctas.toString()],
         },
       };
@@ -150,7 +150,7 @@ export const Navbar = () => {
       try {
         await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_company_info`,
+            function: `${contractAddress}::paylance_v10::get_company_info`,
             functionArguments: [addressString],
           },
         });
@@ -184,7 +184,7 @@ export const Navbar = () => {
       const transaction = {
         sender: addressString,
         data: {
-          function: `${contractAddress}::paylance_v7::deposit_usdc`,
+          function: `${contractAddress}::paylance_v10::deposit_usdc`,
           functionArguments: [amountInMicroUSDC.toString()],
         },
       };
@@ -360,7 +360,7 @@ export const Navbar = () => {
       try {
         const treasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -378,7 +378,7 @@ export const Navbar = () => {
         
         const treasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -411,7 +411,7 @@ export const Navbar = () => {
       try {
         const usdcTreasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -429,7 +429,7 @@ export const Navbar = () => {
         
         const usdcTreasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
             functionArguments: [addressString],
           },
         });

@@ -84,7 +84,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       try {
         const employeesData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_all_employees`,
+            function: `${contractAddress}::paylance_v10::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -112,7 +112,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         
         const employeesData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_all_employees`,
+            function: `${contractAddress}::paylance_v10::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -155,7 +155,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       try {
         const treasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -170,7 +170,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         
         const treasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -200,7 +200,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       try {
         const usdcTreasuryBalance = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -217,7 +217,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
         
         const usdcTreasuryBalance = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_usdc_treasury_balance`,
+            function: `${contractAddress}::paylance_v10::get_usdc_treasury_balance`,
             functionArguments: [addressString],
           },
         });
@@ -253,7 +253,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::${functionName}`,
+          function: `${contractAddress}::paylance_v10::${functionName}`,
           functionArguments: [employeeWallet],
         },
       };
@@ -311,7 +311,7 @@ export const PayrollManagement: React.FC<PayrollManagementProps> = ({ contractAd
       const transaction = {
         sender: account.address,
         data: {
-          function: `${contractAddress}::paylance_v7::${functionName}`,
+          function: `${contractAddress}::paylance_v10::${functionName}`,
           functionArguments: [selectedEmployeeWallets],
         },
       };

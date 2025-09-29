@@ -1,5 +1,5 @@
 // Paylance Payroll System - Move Implementation with USDC Support
-module paylance_addr::paylance_v7 {
+module paylance_addr::paylance_v10 {
     use std::string::{Self, String};
     use std::vector;
     use std::signer;
@@ -9,12 +9,10 @@ module paylance_addr::paylance_v7 {
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::event::{Self, EventHandle};
     use aptos_framework::account;
-    use aptos_framework::fungible_asset::{Self, Metadata, FungibleStore};
-    use aptos_framework::object::Object;
-    use aptos_framework::object;
+    use aptos_framework::fungible_asset::{Self, Metadata, FungibleStore, FungibleAsset};
+    use aptos_framework::object::{Self, Object, ExtendRef};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::dispatchable_fungible_asset;
-    use aptos_framework::resource_account;
     // Note: Pyth integration will be implemented with proper price feed access
     // For now, we'll use a simplified approach with manual price conversion
 
@@ -69,6 +67,10 @@ module paylance_addr::paylance_v7 {
         payroll_paused: bool,
         employees: vector<Employee>,
         all_payments: vector<PaymentLog>,
+        // USDC secondary store owned by a company-owned object (treasury)
+        usdc_store: Object<FungibleStore>,
+        // ExtendRef to generate signer for the store owner object when needed
+        usdc_store_extend_ref: ExtendRef,
         // Event handles
         employee_added_events: EventHandle<EmployeeAddedEvent>,
         employee_removed_events: EventHandle<EmployeeRemovedEvent>,
@@ -82,10 +84,7 @@ module paylance_addr::paylance_v7 {
         coins: Coin<CoinType>,
     }
 
-    // USDC Treasury to hold company's USDC funds
-    struct USDC_Treasury has key {
-        usdc_balance: u64, // Simple balance tracking for USDC
-    }
+    // USDC Treasury resource removed in favor of a real FA secondary store on the Company
 
 
     // Global registry to track all companies
@@ -171,6 +170,12 @@ module paylance_addr::paylance_v7 {
             };
         };
 
+        // Create a secondary USDC store owned by a company-owned object (treasury)
+        let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
+        let store_constructor = object::create_sticky_object(signer::address_of(admin));
+        let usdc_store_extend_ref = object::generate_extend_ref(&store_constructor);
+        let usdc_store = fungible_asset::create_store(&store_constructor, usdc_metadata);
+
         // Create company resource
         let company = Company {
             admin: admin_addr,
@@ -179,6 +184,8 @@ module paylance_addr::paylance_v7 {
             payroll_paused: false,
             employees: vector::empty(),
             all_payments: vector::empty(),
+            usdc_store,
+            usdc_store_extend_ref,
             employee_added_events: account::new_event_handle<EmployeeAddedEvent>(admin),
             employee_removed_events: account::new_event_handle<EmployeeRemovedEvent>(admin),
             salary_paid_events: account::new_event_handle<SalaryPaidEvent>(admin),
@@ -191,14 +198,8 @@ module paylance_addr::paylance_v7 {
             coins: coin::zero<AptosCoin>(),
         };
 
-        // Create simple USDC treasury
-        let usdc_treasury = USDC_Treasury {
-            usdc_balance: 0,
-        };
-
         move_to(admin, company);
         move_to(admin, treasury);
-        move_to(admin, usdc_treasury);
 
         // Update global registry
         if (exists<CompanyRegistry>(registry_address)) {
@@ -620,25 +621,28 @@ module paylance_addr::paylance_v7 {
         coin::merge(&mut treasury.coins, coins);
     }
 
-    // Simple deposit USDC function - just track balance without moving tokens
+    // Deposit USDC into company treasury store (secondary store owned by company)
     public entry fun deposit_usdc(
         admin: &signer,
         amount: u64,
-    ) acquires USDC_Treasury {
+    ) acquires Company {
         let admin_addr = signer::address_of(admin);
-        assert!(exists<USDC_Treasury>(admin_addr), ECOMPANY_NOT_INITIALIZED);
+        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
         assert!(amount > 0, EINVALID_AMOUNT);
+
+        let company = borrow_global_mut<Company>(admin_addr);
+        assert!(company.admin == admin_addr, ENOT_ADMIN);
 
         // Get USDC metadata object
         let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
-        
+
         // Check admin has sufficient USDC balance in their primary store
         let admin_balance = primary_fungible_store::balance(admin_addr, usdc_metadata);
         assert!(admin_balance >= amount, EINSUFFICIENT_USDC_BALANCE);
-        
-        // Just update treasury balance tracking - USDC stays in admin's wallet
-        let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
-        treasury.usdc_balance = treasury.usdc_balance + amount;
+
+        // Withdraw from admin primary store and deposit into company USDC store
+        let fa: FungibleAsset = primary_fungible_store::withdraw(admin, usdc_metadata, amount);
+        dispatchable_fungible_asset::deposit(company.usdc_store, fa);
     }
 
     // Price conversion helper functions
@@ -655,35 +659,35 @@ module paylance_addr::paylance_v7 {
         100000000 // $1.00 in 8 decimals
     }
 
-    // Convert USDC amount to APT amount using simplified pricing
+    // Convert USDC amount (6 decimals) to APT amount (8 decimals) using simplified pricing
     public fun convert_usdc_to_apt(usdc_amount: u64): u64 {
-        let apt_price = get_apt_price();
-        let usdc_price = get_usdc_price();
-        
-        // Convert: (USDC_amount * USDC_price) / APT_price
-        let numerator = usdc_amount * usdc_price;
+        let apt_price = get_apt_price(); // 8-decimal USD price
+        let usdc_price = get_usdc_price(); // 8-decimal USD price
+
+        // Normalize USDC from 6->8 decimals by multiplying by 100
+        // Formula: (usdc_amount_6 * 100 * usdc_price_8) / apt_price_8 => apt_amount_8
+        let numerator = usdc_amount * 100 * usdc_price;
         let denominator = apt_price;
-        
+
         numerator / denominator
     }
 
-    // Convert APT amount to USDC amount using simplified pricing
+    // Convert APT amount (8 decimals) to USDC amount (6 decimals) using simplified pricing
     public fun convert_apt_to_usdc(apt_amount: u64): u64 {
-        let apt_price = get_apt_price();
-        let usdc_price = get_usdc_price();
-        
-        // Convert: (APT_amount * APT_price) / USDC_price
-        let numerator = apt_amount * apt_price;
-        let denominator = usdc_price;
-        
-        numerator / denominator
+        let apt_price = get_apt_price(); // 8-decimal USD price
+        let usdc_price = get_usdc_price(); // 8-decimal USD price
+
+        // First get 8-decimal USDC-equivalent amount: (apt_amount_8 * apt_price_8) / usdc_price_8
+        let usdc_8 = (apt_amount * apt_price) / usdc_price;
+        // Convert 8->6 decimals by dividing by 100
+        usdc_8 / 100
     }
 
     // Fixed single employee USDC payment function
     public entry fun pay_single_employee_usdc(
         admin: &signer,
         employee_wallet: address,
-    ) acquires Company, USDC_Treasury {
+    ) acquires Company {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
         
@@ -700,18 +704,14 @@ module paylance_addr::paylance_v7 {
             if (emp.wallet == employee_wallet) {
                 assert!(!emp.paused, EEMPLOYEE_PAUSED);
                 
-                // Get company USDC treasury and check balance
-                let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
-                assert!(treasury.usdc_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
-                
-                // Get USDC metadata object
-                let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
-                
-                // Transfer USDC directly from admin to employee using primary store transfer
-                primary_fungible_store::transfer(admin, usdc_metadata, employee_wallet, emp.salary_usdc);
-                
-                // Update treasury balance
-                treasury.usdc_balance = treasury.usdc_balance - emp.salary_usdc;
+                // Ensure company USDC store has sufficient balance
+                let store_balance = fungible_asset::balance(company.usdc_store);
+                assert!(store_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
+
+                // Withdraw from company store (using store owner signer) and deposit to employee primary store
+                let store_signer = object::generate_signer_for_extending(&company.usdc_store_extend_ref);
+                let fa_to_pay: FungibleAsset = dispatchable_fungible_asset::withdraw(&store_signer, company.usdc_store, emp.salary_usdc);
+                primary_fungible_store::deposit(employee_wallet, fa_to_pay);
                 
                 // Update employee record
                 emp.last_paid = timestamp::now_microseconds();
@@ -817,7 +817,7 @@ module paylance_addr::paylance_v7 {
     }
 
     // Fixed bulk USDC payment function
-    public entry fun pay_all_employees_usdc(admin: &signer) acquires Company, USDC_Treasury {
+    public entry fun pay_all_employees_usdc(admin: &signer) acquires Company {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
         
@@ -837,23 +837,19 @@ module paylance_addr::paylance_v7 {
             i = i + 1;
         };
 
-        // Check company USDC treasury balance
-        let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
-        assert!(treasury.usdc_balance >= total_usdc_payroll, EINSUFFICIENT_USDC_BALANCE);
+        // Check company USDC store balance
+        let store_balance = fungible_asset::balance(company.usdc_store);
+        assert!(store_balance >= total_usdc_payroll, EINSUFFICIENT_USDC_BALANCE);
 
         // Pay all active employees
         i = 0;
         while (i < len) {
             let emp = vector::borrow_mut(&mut company.employees, i);
             if (!emp.paused) {
-                // Get USDC metadata object
-                let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
-                
-                // Transfer USDC directly from admin to employee using primary store transfer
-                primary_fungible_store::transfer(admin, usdc_metadata, emp.wallet, emp.salary_usdc);
-                
-                // Update treasury balance
-                treasury.usdc_balance = treasury.usdc_balance - emp.salary_usdc;
+                // Withdraw from company store (using store owner signer) and deposit to employee primary store
+                let store_signer = object::generate_signer_for_extending(&company.usdc_store_extend_ref);
+                let fa_to_pay: FungibleAsset = dispatchable_fungible_asset::withdraw(&store_signer, company.usdc_store, emp.salary_usdc);
+                primary_fungible_store::deposit(emp.wallet, fa_to_pay);
                 
                 emp.last_paid = timestamp::now_microseconds();
                 emp.total_paid_usdc = emp.total_paid_usdc + emp.salary_usdc;
@@ -1028,7 +1024,7 @@ module paylance_addr::paylance_v7 {
     public entry fun pay_selected_employees_usdc(
         admin: &signer,
         employee_wallets: vector<address>
-    ) acquires Company, USDC_Treasury {
+    ) acquires Company {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
         
@@ -1036,7 +1032,6 @@ module paylance_addr::paylance_v7 {
         assert!(company.admin == admin_addr, ENOT_ADMIN);
         assert!(!company.payroll_paused, EPAYROLL_PAUSED);
 
-        let treasury = borrow_global_mut<USDC_Treasury>(admin_addr);
         let selected_count = vector::length(&employee_wallets);
         let i = 0;
 
@@ -1053,17 +1048,13 @@ module paylance_addr::paylance_v7 {
                 if (emp.wallet == employee_wallet) {
                     assert!(!emp.paused, EEMPLOYEE_PAUSED);
                     
-                    // Check company USDC treasury balance for this employee
-                    assert!(treasury.usdc_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
-                    
-                    // Get USDC metadata object
-                    let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
-                    
-                    // Transfer USDC directly from admin to employee using primary store transfer
-                    primary_fungible_store::transfer(admin, usdc_metadata, employee_wallet, emp.salary_usdc);
-                    
-                    // Update treasury balance
-                    treasury.usdc_balance = treasury.usdc_balance - emp.salary_usdc;
+                    // Check company USDC store balance for this employee and pay from store
+                    let store_balance = fungible_asset::balance(company.usdc_store);
+                    assert!(store_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
+
+                    let store_signer = object::generate_signer_for_extending(&company.usdc_store_extend_ref);
+                    let fa_to_pay: FungibleAsset = dispatchable_fungible_asset::withdraw(&store_signer, company.usdc_store, emp.salary_usdc);
+                    primary_fungible_store::deposit(employee_wallet, fa_to_pay);
                     
                     // Update employee record
                     emp.last_paid = timestamp::now_microseconds();
@@ -1141,12 +1132,13 @@ module paylance_addr::paylance_v7 {
         coin::value(&treasury.coins)
     }
 
-    // Simple USDC treasury balance view function
+    // USDC treasury balance view function from the company's secondary store
     #[view]
-    public fun get_usdc_treasury_balance(company_address: address): u64 acquires USDC_Treasury {
-        assert!(exists<USDC_Treasury>(company_address), ECOMPANY_NOT_INITIALIZED);
-        let treasury = borrow_global<USDC_Treasury>(company_address);
-        treasury.usdc_balance
+    public fun get_usdc_treasury_balance(company_address: address): u64 acquires Company {
+        assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
+        let company = borrow_global<Company>(company_address);
+        // For dispatchable assets, the balance API is the same
+        fungible_asset::balance(company.usdc_store)
     }
 
     #[view]

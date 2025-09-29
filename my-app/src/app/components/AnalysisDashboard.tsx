@@ -37,7 +37,7 @@ interface EmployeeStats {
 
 interface TokenStats {
   totalAptPaid: number;
-  totalUsdtPaid: number;
+  totalUsdcPaid: number;
 }
 
 export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAddress }) => {
@@ -45,7 +45,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>([]);
   const [employeeStats, setEmployeeStats] = useState<EmployeeStats>({ total: 0, active: 0, paused: 0 });
-  const [tokenStats, setTokenStats] = useState<TokenStats>({ totalAptPaid: 0, totalUsdtPaid: 0 });
+  const [tokenStats, setTokenStats] = useState<TokenStats>({ totalAptPaid: 0, totalUsdcPaid: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,7 +64,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
       try {
         const employeesData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_all_employees`,
+            function: `${contractAddress}::paylance_v10::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -98,7 +98,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         
         const employeesData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_all_employees`,
+            function: `${contractAddress}::paylance_v10::get_all_employees`,
             functionArguments: [addressString],
           },
         });
@@ -143,7 +143,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
       try {
         const paymentLogsData = await testnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_all_payment_logs`,
+            function: `${contractAddress}::paylance_v10::get_all_payment_logs`,
             functionArguments: [addressString],
           },
         });
@@ -164,13 +164,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         // Calculate token statistics
         const totalAptPaid = formattedLogs
           .filter(log => log.token_type === 'APT')
-          .reduce((sum, log) => sum + (log.amount / 100000000), 0); // Convert from octas to APT
-        
-        const totalUsdtPaid = formattedLogs
-          .filter(log => log.token_type === 'USDT')
-          .reduce((sum, log) => sum + (log.amount / 100000000), 0);
-        
-        setTokenStats({ totalAptPaid, totalUsdtPaid });
+          .reduce((sum, log) => sum + (log.amount / 100000000), 0); // APT in octas
+
+        const totalUsdcPaid = formattedLogs
+          .filter(log => log.token_type === 'USDC')
+          .reduce((sum, log) => sum + (log.amount / 1000000), 0); // USDC in 6 decimals
+
+        setTokenStats({ totalAptPaid, totalUsdcPaid });
         
       } catch (testnetError) {
         console.log("Testnet failed, trying mainnet...");
@@ -180,7 +180,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         
         const paymentLogsData = await mainnetAptos.view({
           payload: {
-            function: `${contractAddress}::paylance_v7::get_all_payment_logs`,
+            function: `${contractAddress}::paylance_v10::get_all_payment_logs`,
             functionArguments: [addressString],
           },
         });
@@ -201,13 +201,13 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         // Calculate token statistics
         const totalAptPaid = formattedLogs
           .filter(log => log.token_type === 'APT')
-          .reduce((sum, log) => sum + (log.amount / 100000000), 0); // Convert from octas to APT
-        
-        const totalUsdtPaid = formattedLogs
-          .filter(log => log.token_type === 'USDT')
-          .reduce((sum, log) => sum + (log.amount / 100000000), 0);
-        
-        setTokenStats({ totalAptPaid, totalUsdtPaid });
+          .reduce((sum, log) => sum + (log.amount / 100000000), 0); // APT in octas
+
+        const totalUsdcPaid = formattedLogs
+          .filter(log => log.token_type === 'USDC')
+          .reduce((sum, log) => sum + (log.amount / 1000000), 0); // USDC in 6 decimals
+
+        setTokenStats({ totalAptPaid, totalUsdcPaid });
       }
     } catch (err: any) {
       console.error('Error fetching payment logs:', err);
@@ -240,7 +240,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
     
     if (filterType === 'All') return matchesSearch;
     if (filterType === 'APT') return matchesSearch && log.token_type === 'APT';
-    if (filterType === 'USDT') return matchesSearch && log.token_type === 'USDT';
+    if (filterType === 'USDC') return matchesSearch && log.token_type === 'USDC';
     
     return matchesSearch;
   });
@@ -252,8 +252,10 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
   };
 
   // Format amount
-  const formatAmount = (amount: number) => {
-    return (amount / 100000000).toFixed(4); // Convert from octas to APT
+  const formatAmount = (amount: number, token: string) => {
+    if (token === 'APT') return (amount / 100000000).toFixed(4);
+    if (token === 'USDC') return (amount / 1000000).toFixed(4);
+    return amount.toString();
   };
 
   // Fetch data on component mount
@@ -330,9 +332,9 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
                 <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-xs font-bold">U</span>
                 </div>
-                <span className="text-sm font-medium text-gray-700">USDT</span>
+                <span className="text-sm font-medium text-gray-700">USDC</span>
               </div>
-              <span className="text-sm font-semibold text-gray-900">{tokenStats.totalUsdtPaid.toFixed(4)} USDT</span>
+              <span className="text-sm font-semibold text-gray-900">{tokenStats.totalUsdcPaid.toFixed(4)} USDC</span>
             </div>
           </div>
         </div>
@@ -402,7 +404,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
               >
                 <option value="All">All</option>
                 <option value="APT">APT</option>
-                <option value="USDT">USDT</option>
+                <option value="USDC">USDC</option>
               </select>
               <input
                 type="text"
@@ -449,7 +451,7 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
                   </div>
                   <div className="text-right">
                     <div className="font-semibold text-gray-900">
-                      {formatAmount(log.amount)} {log.token_type}
+                      {formatAmount(log.amount, log.token_type)} {log.token_type}
                     </div>
                     <div className="text-sm text-gray-600">{formatTimestamp(log.timestamp)}</div>
                   </div>
