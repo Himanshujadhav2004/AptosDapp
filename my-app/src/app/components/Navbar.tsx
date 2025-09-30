@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
 import { WalletModal } from './WalletModal';
+import { useCompanyStatus } from '../hooks/useCompanyStatus';
 
 export const Navbar = () => {
   const { account, connected, signAndSubmitTransaction } = useWallet();
+  const { hasCompany } = useCompanyStatus();
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [balance, setBalance] = useState<number>(0);
@@ -478,7 +480,7 @@ export const Navbar = () => {
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                  AptosDApp
+                  AptosPaylance
                 </h1>
               </div>
             </div>
@@ -486,42 +488,63 @@ export const Navbar = () => {
             {/* Navigation Links */}
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-8">
+                {/* Always show Home */}
                 <Link
                   href="/"
                   className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
                   Home
                 </Link>
-                <Link
-                  href="/create-company"
-                  className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  Create Payroll
-                </Link>
-                <Link
-                  href="/employees"
-                  className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  Employees
-                </Link>
-                <Link
-                  href="/pay"
-                  className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  Pay
-                </Link>
-                <Link
-                  href="/analysis"
-                  className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  Analysis
-                </Link>
-                <Link
-                  href="/about"
-                  className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  About
-                </Link>
+
+                {/* Show Create Payroll only if wallet not connected OR connected but no company */}
+                {(!connected || !hasCompany) && (
+                  <Link
+                    href="/create-company"
+                    className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                  >
+                    Create Payroll
+                  </Link>
+                )}
+
+                {/* Show these only if connected AND has company */}
+                {connected && hasCompany && (
+                  <>
+                    <Link
+                      href="/employees"
+                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                    >
+                      Employees
+                    </Link>
+                    <Link
+                      href="/pay"
+                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                    >
+                      Pay
+                    </Link>
+                    <Link
+                      href="/analysis"
+                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                    >
+                      Analysis
+                    </Link>
+                    <Link
+                      href="/about"
+                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                    >
+                      About
+                    </Link>
+                  </>
+                )}
+
+                {/* Always show Coming Soon for users without company or not connected */}
+                {(!connected || !hasCompany) && (
+                  <Link
+                    href="/coming-soon"
+                    className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                  >
+                    Coming Soon
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -529,49 +552,53 @@ export const Navbar = () => {
             <div className="flex items-center space-x-3">
               {connected && account ? (
                 <>
-                  {/* Treasury Balance Display */}
-                  <div className="flex items-center space-x-4">
-                    {/* APT Treasury Balance */}
-                    <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                      {isLoadingBalance ? (
-                        <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                      ) : (
-                        <span className="text-sm font-medium text-gray-700">
-                          {balance.toFixed(4)} APT
-                        </span>
-                      )}
-                    </div>
+                  {/* Treasury Balance Display - Only show if user has company */}
+                  {hasCompany && (
+                    <>
+                      <div className="flex items-center space-x-4">
+                        {/* APT Treasury Balance */}
+                        <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                          {isLoadingBalance ? (
+                            <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                          ) : (
+                            <span className="text-sm font-medium text-gray-700">
+                              {balance.toFixed(4)} APT
+                            </span>
+                          )}
+                        </div>
 
-                    {/* USDC Treasury Balance */}
-                    <div className="flex items-center space-x-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
-                      <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                      </svg>
-                      {isLoadingUsdcTreasuryBalance ? (
-                        <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
-                      ) : (
-                        <span className="text-sm font-medium text-purple-700">
-                          {usdcTreasuryBalance.toFixed(2)} USDC
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                        {/* USDC Treasury Balance */}
+                        <div className="flex items-center space-x-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
+                          <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                          </svg>
+                          {isLoadingUsdcTreasuryBalance ? (
+                            <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
+                          ) : (
+                            <span className="text-sm font-medium text-purple-700">
+                              {usdcTreasuryBalance.toFixed(2)} USDC
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                  {/* Deposit Button */}
-                  <button
-                    onClick={handleDepositClick}
-                    className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    <span>Deposit</span>
-                  </button>
+                      {/* Deposit Button */}
+                      <button
+                        onClick={handleDepositClick}
+                        className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Deposit</span>
+                      </button>
+                    </>
+                  )}
 
-                  {/* Wallet Address */}
+                  {/* Wallet Address - Always show when connected */}
                   <div className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                     <span 
@@ -609,42 +636,63 @@ export const Navbar = () => {
         {/* Mobile menu */}
         <div className="md:hidden">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-200">
+            {/* Always show Home */}
             <Link
               href="/"
               className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
             >
               Home
             </Link>
-            <Link
-              href="/create-company"
-              className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              Create Payroll
-            </Link>
-            <Link
-              href="/employees"
-              className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              Employees
-            </Link>
-            <Link
-              href="/pay"
-              className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              Pay
-            </Link>
-            <Link
-              href="/analysis"
-              className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              Analysis
-            </Link>
-            <Link
-              href="/about"
-              className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              About
-            </Link>
+
+            {/* Show Create Payroll only if wallet not connected OR connected but no company */}
+            {(!connected || !hasCompany) && (
+              <Link
+                href="/create-company"
+                className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+              >
+                Create Payroll
+              </Link>
+            )}
+
+            {/* Show these only if connected AND has company */}
+            {connected && hasCompany && (
+              <>
+                <Link
+                  href="/employees"
+                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                >
+                  Employees
+                </Link>
+                <Link
+                  href="/pay"
+                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                >
+                  Pay
+                </Link>
+                <Link
+                  href="/analysis"
+                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                >
+                  Analysis
+                </Link>
+                <Link
+                  href="/about"
+                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                >
+                  About
+                </Link>
+              </>
+            )}
+
+            {/* Always show Coming Soon for users without company or not connected */}
+            {(!connected || !hasCompany) && (
+              <Link
+                href="/coming-soon"
+                className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+              >
+                Coming Soon
+              </Link>
+            )}
           </div>
         </div>
       </nav>

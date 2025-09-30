@@ -1,9 +1,12 @@
+import { RouteGuard } from '../components';
+
 export default function AboutPage() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <RouteGuard requireWallet={true} requireCompany={true}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Header */}
       <div className="text-center mb-16">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">About AptosDApp</h1>
+        <h1 className="text-4xl font-bold text-gray-900 mb-4">About AptosPaylance</h1>
         <p className="text-lg text-gray-600">A comprehensive payroll management system built on Aptos blockchain</p>
       </div>
 
@@ -174,6 +177,7 @@ export default function AboutPage() {
           </ul>
         </div>
       </div>
-    </div>
+      </div>
+    </RouteGuard>
   );
 }

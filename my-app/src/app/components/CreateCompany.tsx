@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
 
@@ -9,6 +10,7 @@ interface CreateCompanyProps {
 }
 
 export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress }) => {
+  const router = useRouter();
   const { account, signAndSubmitTransaction } = useWallet();
   const [companyName, setCompanyName] = useState('');
   const [companyEmail, setCompanyEmail] = useState('');
@@ -108,6 +110,11 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
       const result = await signAndSubmitTransaction(transaction);
       setTxnHash(result.hash);
       console.log('Company created successfully:', result.hash);
+
+      // Wait a moment for the transaction to be processed, then redirect
+      setTimeout(() => {
+        router.push('/employees');
+      }, 2000);
 
     } catch (err: any) {
       console.error('Company creation failed:', err);

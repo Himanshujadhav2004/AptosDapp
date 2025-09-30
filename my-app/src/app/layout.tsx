@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AptosDApp - Your Aptos dApp",
+  title: "AptosPaylance - Your Aptos dApp",
   description: "A modern Aptos dApp with wallet integration",
 };
 
