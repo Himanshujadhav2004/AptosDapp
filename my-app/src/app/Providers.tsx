@@ -4,6 +4,7 @@ import { PropsWithChildren } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AptosWalletAdapterProvider } from "@aptos-labs/wallet-adapter-react";
 import AptosCoreProvider from "./AptosCoreProvider";
+import { ToastProvider } from "./components/ui/Toast";
 
 const queryClient = new QueryClient();
 
@@ -17,7 +18,9 @@ export default function Providers({ children }: PropsWithChildren) {
       }}
     >
       <QueryClientProvider client={queryClient}>
-        <AptosCoreProvider>{children}</AptosCoreProvider>
+        <ToastProvider>
+          <AptosCoreProvider>{children}</AptosCoreProvider>
+        </ToastProvider>
       </QueryClientProvider>
     </AptosWalletAdapterProvider>
   );

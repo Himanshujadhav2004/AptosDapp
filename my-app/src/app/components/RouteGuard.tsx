@@ -35,21 +35,14 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({
 
     // If on create-company page but user already has a company, redirect to employees
     if (!requireCompany && requireWallet && !isChecking && hasCompany && connected) {
-      router.push('/employees');
+      router.push('/dashboard');
       return;
     }
   }, [requireWallet, requireCompany, connected, hasCompany, isChecking, router]);
 
-  // Show loading state while checking
+  // While checking, avoid showing loader; defer rendering
   if (isChecking && (requireWallet || requireCompany)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center space-y-4">
-          <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin"></div>
-          <p className="text-gray-600">Checking access...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // Don't render if requirements not met

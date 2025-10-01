@@ -1,22 +1,43 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
-import Providers from "./Providers"; // ✅ wrap app in Providers
+import Providers from "./Providers";
 import { Navbar } from "./components/Navbar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const satoshi = localFont({
+  src: [
+    {
+      path: "../../public/fonts/Satoshi-Light.woff2",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/Satoshi-Regular.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/Satoshi-Medium.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/Satoshi-Bold.woff2",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/Satoshi-Black.woff2",
+      weight: "900",
+      style: "normal",
+    },
+  ],
+  variable: "--font-satoshi",
 });
 
 export const metadata: Metadata = {
-  title: "AptosPaylance - Your Aptos dApp",
-  description: "A modern Aptos dApp with wallet integration",
+  title: "AptosPaylance - Decentralized Payroll Management",
+  description: "A modern payroll management system built on Aptos blockchain",
 };
 
 export default function RootLayout({
@@ -25,16 +46,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" className="dark">
+      <body className={`${satoshi.variable} antialiased`}>
         <Providers>
-          <div className="min-h-screen bg-gray-50">
+          <div className="min-h-screen">
             <Navbar />
             <main>{children}</main>
           </div>
-        </Providers> {/* ✅ wrap entire app */}
+        </Providers>
       </body>
     </html>
   );

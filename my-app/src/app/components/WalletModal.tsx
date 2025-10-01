@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
+import Image from 'next/image';
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -64,15 +65,15 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
       
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all">
+        <div className="relative bg-card border border-border rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
+          <div className="flex items-center justify-between p-6 border-b border-border">
+            <h2 className="text-xl font-semibold text-foreground">
               {connected ? 'Wallet Connected' : 'Connect Wallet'}
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+              className="text-muted-foreground hover:text-foreground transition-colors duration-200"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -99,9 +100,9 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
 
                 {/* Account Details */}
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div className="flex items-center py-2 border-b border-gray-100">
                     <span className="text-sm text-gray-600">Address:</span>
-                    <span className="text-sm font-mono text-gray-900">
+                    <span className="text-sm ml-4 font-mono text-white-900">
                       {truncateAddress(account.address.toString())}
                     </span>
                   </div>
@@ -121,7 +122,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
               </div>
             ) : (
               <div className="space-y-4">
-                <p className="text-sm text-gray-600 text-center">
+                <p className="text-sm text-muted-foreground text-center">
                   Choose a wallet to connect to your Aptos dApp
                 </p>
                 
@@ -131,26 +132,36 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
                     <button
                       key={wallet.name}
                       onClick={() => handleConnect(wallet.name)}
-                      className="w-full flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group"
+                      className="w-full flex items-center space-x-4 p-4 bg-secondary/10 border border-border rounded-lg hover:border-primary/50 hover:bg-primary/10 transition-all duration-200 group"
                     >
-                      {/* Wallet Icon Placeholder */}
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">
-                          {wallet.name.charAt(0).toUpperCase()}
-                        </span>
+                      {/* Wallet Icon */}
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+                        {wallet.name.toLowerCase().includes('petra') ? (
+                          <Image src="/icons/petra.png" alt="Petra" width={40} height={40} className="w-10 h-10 object-contain" />
+                        ) : wallet.name.toLowerCase().includes('google') ? (
+                          <Image src="/icons/google.png" alt="Google" width={40} height={40} className="w-10 h-10 object-contain" />
+                        ) : wallet.name.toLowerCase().includes('apple') ? (
+                          <Image src="/icons/apple.png" alt="Apple" width={40} height={40} className="w-10 h-10 object-contain" />
+                        ) : (
+                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                            <span className="text-white font-bold text-sm">
+                              {wallet.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex-1 text-left">
-                        <h3 className="font-medium text-gray-900 group-hover:text-purple-700">
+                        <h3 className="font-medium text-foreground group-hover:text-primary">
                           {wallet.name}
                         </h3>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-muted-foreground">
                           Connect with {wallet.name}
                         </p>
                       </div>
                       
                       <svg 
-                        className="w-5 h-5 text-gray-400 group-hover:text-purple-600" 
+                        className="w-5 h-5 text-muted-foreground group-hover:text-primary" 
                         fill="none" 
                         stroke="currentColor" 
                         viewBox="0 0 24 24"
@@ -161,20 +172,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
                   ))}
                 </div>
 
-                {/* Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-start space-x-2">
-                    <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <p className="text-sm text-blue-800 font-medium">New to Aptos?</p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        Install a wallet like Petra or Pontem to get started with Aptos dApps.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+               
               </div>
             )}
           </div>

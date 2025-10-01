@@ -10,39 +10,53 @@ export const useCompanyStatus = () => {
   const [hasCompany, setHasCompany] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
+  const checkCompany = async () => {
+    if (!connected || !account?.address) {
+      setHasCompany(false);
+      setIsChecking(false);
+      return;
+    }
+
+    setIsChecking(true);
+    try {
+      const addressString = typeof account.address === 'string' 
+        ? account.address 
+        : account.address.toString();
+
+      const response = await fetch(
+        `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${CONTRACT_ADDRESS}::paylance_v12::Company`
+      );
+
+      if (response.ok) {
+        setHasCompany(true);
+      } else {
+        setHasCompany(false);
+      }
+    } catch (err) {
+      console.error('Error checking company status:', err);
+      setHasCompany(false);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
   useEffect(() => {
-    const checkCompany = async () => {
-      if (!connected || !account?.address) {
-        setHasCompany(false);
-        setIsChecking(false);
-        return;
-      }
-
-      setIsChecking(true);
-      try {
-        const addressString = typeof account.address === 'string' 
-          ? account.address 
-          : account.address.toString();
-
-        const response = await fetch(
-          `https://fullnode.testnet.aptoslabs.com/v1/accounts/${addressString}/resource/${CONTRACT_ADDRESS}::paylance_v12::Company`
-        );
-
-        if (response.ok) {
-          setHasCompany(true);
-        } else {
-          setHasCompany(false);
-        }
-      } catch (err) {
-        console.error('Error checking company status:', err);
-        setHasCompany(false);
-      } finally {
-        setIsChecking(false);
-      }
-    };
-
     checkCompany();
   }, [connected, account?.address]);
 
-  return { hasCompany, isChecking };
+  // Listen for company creation events
+  useEffect(() => {
+    const handleCompanyCreated = () => {
+      console.log('Company created event received, refreshing company status...');
+      // Add a small delay to allow blockchain processing
+      setTimeout(() => {
+        checkCompany();
+      }, 1000);
+    };
+
+    window.addEventListener('company:created', handleCompanyCreated);
+    return () => window.removeEventListener('company:created', handleCompanyCreated);
+  }, [connected, account?.address]);
+
+  return { hasCompany, isChecking, refreshCompanyStatus: checkCompany };
 };

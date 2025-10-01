@@ -2,16 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
 import { WalletModal } from './WalletModal';
 import { useCompanyStatus } from '../hooks/useCompanyStatus';
+import { cn } from '../lib/utils';
+import Wrapper from './global/Wrapper';
+import Icons from './global/Icons';
 
 export const Navbar = () => {
   const { account, connected, signAndSubmitTransaction } = useWallet();
   const { hasCompany } = useCompanyStatus();
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [balance, setBalance] = useState<number>(0);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [depositAmount, setDepositAmount] = useState<string>('');
@@ -471,666 +476,485 @@ export const Navbar = () => {
     return () => window.removeEventListener('treasury:refresh', onRefresh);
   }, [connected, account?.address]);
 
+  // Listen for company creation events to refresh company status
+  useEffect(() => {
+    const onCompanyCreated = () => {
+      console.log('Company created event received in navbar, refreshing...');
+      // Force a re-render by updating a state or triggering a refresh
+      // The useCompanyStatus hook will handle the actual refresh
+    };
+    window.addEventListener('company:created', onCompanyCreated);
+    return () => window.removeEventListener('company:created', onCompanyCreated);
+  }, []);
+
+  // Handle mobile menu overflow
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
+
   return (
     <>
-      <nav className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo/Brand */}
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
-                  AptosPaylance
-                </h1>
-              </div>
+      {/* Backdrop blur overlay */}
+      <div className="relative w-full h-full">
+        <div className="z-[99] fixed pointer-events-none inset-x-0 h-[88px] bg-[rgba(10,10,10,0.8)] backdrop-blur-sm [mask:linear-gradient(to_bottom,#000_20%,transparent_calc(100%-20%))]"></div>
+
+        <header
+          className={cn(
+            "fixed top-4 inset-x-0 mx-auto max-w-6xl px-2 md:px-12 z-[100] th",
+            isMobileMenuOpen ? "h-[calc(100%-24px)]" : "h-12"
+          )}
+        >
+          <Wrapper className="backdrop-blur-lg rounded-xl lg:rounded-2xl border border-[rgba(124,124,124,0.2)] px-2 md:px-2 flex items-center justify-start">
+            <div className={cn(
+              "flex items-center w-full sticky mt-[7px] lg:mt-auto mb-auto inset-x-0",
+              (!connected || !hasCompany) ? "justify-between" : "justify-between"
+            )}>
+              {/* Logo */}
+              <div className="flex items-center pl-1">
+                <Link href="/" className="flex items-center gap-3">
+                  <Icons.icon className="w-auto h-10" />
+                  <span className="text-xl font-semibold text-foreground">AptosPaylance</span>
+                </Link>
             </div>
 
-            {/* Navigation Links */}
-            <div className="hidden md:block">
-              <div className="ml-10 flex items-baseline space-x-8">
+              {/* Desktop Navigation Links - Centered when not connected/no company */}
+              <div className={cn(
+                "items-center hidden lg:flex gap-6",
+                (!connected || !hasCompany) ? "absolute left-1/2 -translate-x-1/2" : "ml-4"
+              )}>
                 {/* Always show Home */}
                 <Link
                   href="/"
-                  className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Home
                 </Link>
 
                 {/* Show Create Payroll only if wallet not connected OR connected but no company */}
                 {(!connected || !hasCompany) && (
-                  <Link
-                    href="/create-company"
-                    className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                  >
-                    Create Payroll
-                  </Link>
+                <Link
+                  href="/create-company"
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Create Payroll
+                </Link>
                 )}
 
                 {/* Show these only if connected AND has company */}
                 {connected && hasCompany && (
                   <>
-                    <Link
-                      href="/employees"
-                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                    >
-                      Employees
-                    </Link>
-                    <Link
-                      href="/pay"
-                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                    >
-                      Pay
-                    </Link>
-                    <Link
-                      href="/analysis"
-                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                    >
-                      Analysis
-                    </Link>
-                    <Link
-                      href="/about"
-                      className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                    >
-                      About
-                    </Link>
-                  </>
-                )}
-
-                {/* Always show Coming Soon for users without company or not connected */}
-                {(!connected || !hasCompany) && (
-                  <Link
-                    href="/coming-soon"
-                    className="text-gray-700 hover:text-purple-600 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                  >
-                    Coming Soon
-                  </Link>
-                )}
-              </div>
-            </div>
-
-            {/* Connect Button */}
-            <div className="flex items-center space-x-3">
-              {connected && account ? (
-                <>
-                  {/* Treasury Balance Display - Only show if user has company */}
-                  {hasCompany && (
-                    <>
-                      <div className="flex items-center space-x-4">
-                        {/* APT Treasury Balance */}
-                        <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                          {isLoadingBalance ? (
-                            <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                          ) : (
-                            <span className="text-sm font-medium text-gray-700">
-                              {balance.toFixed(4)} APT
-                            </span>
-                          )}
-                        </div>
-
-                        {/* USDC Treasury Balance */}
-                        <div className="flex items-center space-x-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2">
-                          <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                          </svg>
-                          {isLoadingUsdcTreasuryBalance ? (
-                            <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
-                          ) : (
-                            <span className="text-sm font-medium text-purple-700">
-                              {usdcTreasuryBalance.toFixed(2)} USDC
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Deposit Button */}
-                      <button
-                        onClick={handleDepositClick}
-                        className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        <span>Deposit</span>
-                      </button>
-                    </>
-                  )}
-
-                  {/* Wallet Address - Always show when connected */}
-                  <div className="flex items-center space-x-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span 
-                      className="text-sm font-medium text-green-700 cursor-pointer" 
-                      onClick={() => setIsWalletModalOpen(true)}
-                    >
-                      {truncateAddress(account.address.toString())}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <button
-                  onClick={handleConnectClick}
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                >
-                  Connect Wallet
-                </button>
-              )}
-            </div>
-
-            {/* Mobile menu button */}
-            <div className="md:hidden">
-              <button
-                type="button"
-                className="text-gray-700 hover:text-purple-600 focus:outline-none focus:text-purple-600"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile menu */}
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-200">
-            {/* Always show Home */}
-            <Link
-              href="/"
-              className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-            >
-              Home
-            </Link>
-
-            {/* Show Create Payroll only if wallet not connected OR connected but no company */}
-            {(!connected || !hasCompany) && (
-              <Link
-                href="/create-company"
-                className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-              >
-                Create Payroll
-              </Link>
-            )}
-
-            {/* Show these only if connected AND has company */}
-            {connected && hasCompany && (
-              <>
                 <Link
-                  href="/employees"
-                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                      href="/dashboard"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Employees
+                      Dashboard
                 </Link>
                 <Link
                   href="/pay"
-                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Pay
                 </Link>
                 <Link
                   href="/analysis"
-                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                      className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Analysis
                 </Link>
-                <Link
-                  href="/about"
-                  className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
-                >
-                  About
-                </Link>
-              </>
-            )}
+                    
+                  </>
+                )}
 
-            {/* Always show Coming Soon for users without company or not connected */}
-            {(!connected || !hasCompany) && (
-              <Link
-                href="/coming-soon"
-                className="text-gray-700 hover:text-purple-600 block px-3 py-2 rounded-md text-base font-medium"
+                {/* Always show Coming Soon for users without company or not connected */}
+                {(!connected || !hasCompany) && (
+                <Link
+                    href="/coming-soon"
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    Coming Soon
+                </Link>
+                )}
+            </div>
+
+              {/* Right side buttons */}
+              <div className="items-center flex gap-2 lg:gap-4">
+              {connected && account ? (
+                <>
+                    {/* Treasury Balance Display - Only show if user has company */}
+                    {hasCompany && (
+                      <>
+                        <div className="hidden lg:flex items-center gap-2">
+                    {/* APT Treasury Balance */}
+                          <div className="flex items-center gap-1.5 bg-secondary/20 border border-border rounded-lg px-2.5 py-1.5">
+                            <Image 
+                              src="/icons/apt.png" 
+                              alt="APT" 
+                              width={16} 
+                              height={16} 
+                              className="w-4 h-4 object-contain"
+                            />
+                            <div className="flex flex-col">
+                             
+                      {isLoadingBalance ? (
+                                <span className="text-xs">—</span>
+                      ) : (
+                                <span className="text-sm font-semibold text-foreground leading-none">
+                                  {balance.toFixed(4)}
+                        </span>
+                      )}
+                            </div>
+                    </div>
+
+                    {/* USDC Treasury Balance */}
+                          <div className="flex items-center gap-1.5 bg-secondary/20 border border-border rounded-lg px-2.5 py-1.5">
+                            <Image 
+                              src="/icons/usdc.png" 
+                              alt="USDC" 
+                              width={16} 
+                              height={16} 
+                              className="w-4 h-4 object-contain"
+                            />
+                            <div className="flex flex-col">
+                              
+                      {isLoadingUsdcTreasuryBalance ? (
+                                <span className="text-xs">—</span>
+                      ) : (
+                                <span className="text-sm font-semibold text-foreground leading-none">
+                                  {usdcTreasuryBalance.toFixed(2)}
+                        </span>
+                      )}
+                            </div>
+                    </div>
+                  </div>
+
+                  {/* Deposit Button */}
+                  <button
+                    onClick={handleDepositClick}
+                          className="hidden sm:flex items-center gap-2 btn-secondary px-4 py-1.5 rounded-lg text-sm font-medium"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Deposit</span>
+                  </button>
+                      </>
+                    )}
+
+                    {/* Wallet Address - Always show when connected */}
+                    <button
+                      onClick={() => setIsWalletModalOpen(true)}
+                      className="hidden sm:flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-3 py-1.5 hover:bg-primary/20 transition-colors"
+                    >
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-sm font-medium text-foreground">
+                      {truncateAddress(account.address.toString())}
+                    </span>
+                    </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleConnectClick}
+                    className="hidden sm:flex btn-primary px-5 py-2 rounded-lg text-sm font-medium"
+                >
+                  Connect Wallet
+                </button>
+              )}
+
+                {/* Mobile menu toggle */}
+              <button
+                  onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+                  className="lg:hidden p-2 w-8 h-8 text-foreground hover:text-primary transition-colors"
               >
-                Coming Soon
-              </Link>
-            )}
+                  {isMobileMenuOpen ? (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                  ) : (
+                    <Icons.menu className="w-3.5 h-3.5" />
+                  )}
+              </button>
+            </div>
           </div>
+
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+              <div className="lg:hidden mt-4 pb-4 px-2 space-y-3">
+                {/* Mobile Menu Header */}
+                <div className="flex items-center justify-between px-1 pb-2 border-b border-border">
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-2 px-2 py-1 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
+                  <span className="text-sm font-semibold text-foreground">Menu</span>
+                  <span className="w-10" />
         </div>
-      </nav>
+
+                {/* Mobile Navigation Links */}
+                <div className="flex flex-col items-center gap-1 text-center w-full max-w-[240px] mx-auto">
+            <Link
+              href="/"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block w-full max-w-[200px] mx-auto px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-center"
+            >
+              Home
+            </Link>
+
+                  {(!connected || !hasCompany) && (
+            <Link
+              href="/create-company"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block w-full max-w-[200px] mx-auto px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-center"
+            >
+              Create Payroll
+            </Link>
+                  )}
+
+                  {connected && hasCompany && (
+                    <>
+            <Link
+                        href="/dashboard"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full max-w-[200px] mx-auto px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-center"
+            >
+              Employees
+            </Link>
+            <Link
+              href="/pay"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full max-w-[200px] mx-auto px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-center"
+            >
+              Pay
+            </Link>
+            <Link
+              href="/analysis"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="block w-full max-w-[200px] mx-auto px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-center"
+            >
+              Analysis
+            </Link>
+                      
+                    </>
+                  )}
+
+                  {(!connected || !hasCompany) && (
+            <Link
+                      href="/coming-soon"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="block w-full max-w-[200px] mx-auto px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors text-center"
+            >
+                      Coming Soon
+            </Link>
+                  )}
+          </div>
+
+                {/* Mobile Wallet Section */}
+                <div className="pt-4 mt-4 border-t border-border space-y-2">
+                  {connected && account ? (
+                    <>
+                      {hasCompany && (
+                        <div className="px-3 py-2 space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">APT Balance:</span>
+                            <span className="font-medium text-foreground">{balance.toFixed(4)}</span>
+        </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">USDC Balance:</span>
+                            <span className="font-medium text-foreground">{usdcTreasuryBalance.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setIsWalletModalOpen(true)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors"
+                      >
+                        <span className="text-foreground">{truncateAddress(account.address.toString())}</span>
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      </button>
+                      {hasCompany && (
+                        <button
+                          onClick={handleDepositClick}
+                          className="w-full flex items-center justify-center gap-2 btn-secondary px-4 py-2 rounded-lg text-sm font-medium"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          <span>Deposit</span>
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleConnectClick}
+                      className="w-full btn-primary px-5 py-2 rounded-lg text-sm font-medium"
+                    >
+                      Connect Wallet
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </Wrapper>
+        </header>
+      </div>
 
       {/* Wallet Modal */}
       <WalletModal isOpen={isWalletModalOpen} onClose={handleCloseModal} />
 
       {/* Deposit Modal */}
       {isDepositModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Deposit Tokens</h3>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <h3 className="text-base font-heading font-semibold text-foreground">Deposit Funds</h3>
               <button
                 onClick={handleCloseDepositModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="flex border-b border-gray-200">
+            {/* Tabs */}
+            <div className="flex gap-2 p-3 border-b border-border">
               <button
                 onClick={() => setActiveDepositTab('apt')}
-                className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-                  activeDepositTab === 'apt'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={cn(
+                  'flex-1 px-3 py-2 text-xs font-medium rounded-lg border',
+                  activeDepositTab === 'apt' ? 'bg-primary/10 border-primary text-primary' : 'bg-secondary/30 border-border text-muted-foreground hover:text-foreground'
+                )}
               >
-                <div className="flex items-center justify-center space-x-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                  </svg>
+                <div className="flex items-center justify-center gap-1.5">
+                  <Image src="/icons/apt.png" alt="APT" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
                   <span>APT</span>
                 </div>
               </button>
               <button
                 onClick={() => setActiveDepositTab('usdc')}
-                className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-                  activeDepositTab === 'usdc'
-                    ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={cn(
+                  'flex-1 px-3 py-2 text-xs font-medium rounded-lg border',
+                  activeDepositTab === 'usdc' ? 'bg-primary/10 border-primary text-primary' : 'bg-secondary/30 border-border text-muted-foreground hover:text-foreground'
+                )}
               >
-                <div className="flex items-center justify-center space-x-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                  </svg>
+                <div className="flex items-center justify-center gap-1.5">
+                  <Image src="/icons/usdc.png" alt="USDC" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
                   <span>USDC</span>
                 </div>
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6">
-              {activeDepositTab === 'apt' ? (
-                <>
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                      </svg>
-                    </div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">Deposit APT to Treasury</h4>
-                    <p className="text-sm text-gray-600">
-                      Deposit APT tokens directly to the contract treasury using smart contract function
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                      </svg>
-                    </div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">Deposit USDC to Treasury</h4>
-                    <p className="text-sm text-gray-600">
-                      Deposit USDC tokens directly to the contract treasury using smart contract function
-                    </p>
-                  </div>
-                </>
-              )}
+            {/* Body */}
+            <div className="p-5 space-y-5.5">
+              <p className="text-[10px] text-muted-foreground text-center">Top-up your Paylance treasury with APT or USDC</p>
 
-              {/* Balance Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {activeDepositTab === 'apt' ? (
-                  <>
-                    {/* User APT Wallet Balance */}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                          </svg>
-                          <span className="text-sm font-medium text-blue-700">Your APT:</span>
-                        </div>
-                        <span className="text-sm font-semibold text-blue-900">
-                          {isLoadingUserBalance ? (
-                            <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
-                          ) : (
-                            `${userBalance.toFixed(4)} APT`
-                          )}
-                        </span>
-                      </div>
-                      <p className="text-xs text-blue-600 mt-1">Available to deposit</p>
-                    </div>
-
-                    {/* Treasury APT Balance */}
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                          <span className="text-sm font-medium text-green-700">Treasury APT:</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-semibold text-green-900">
-                            {isLoadingBalance ? (
-                              <div className="w-4 h-4 border-2 border-green-300 border-t-green-600 rounded-full animate-spin"></div>
-                            ) : (
-                              `${balance.toFixed(4)} APT`
-                            )}
-                          </span>
-                          <button
-                            onClick={fetchTreasuryBalance}
-                            disabled={isLoadingBalance}
-                            className="p-1 text-green-500 hover:text-green-700 disabled:opacity-50"
-                            title="Refresh Treasury Balance"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-green-600 mt-1">Available for payroll</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* User USDC Wallet Balance */}
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                          </svg>
-                          <span className="text-sm font-medium text-purple-700">Your USDC:</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-semibold text-purple-900">
-                            {isLoadingUsdcBalance ? (
-                              <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
-                            ) : (
-                              `${usdcBalance.toFixed(2)} USDC`
-                            )}
-                          </span>
-                          <button
-                            onClick={fetchUSDCBalance}
-                            disabled={isLoadingUsdcBalance}
-                            className="p-1 text-purple-500 hover:text-purple-700 disabled:opacity-50"
-                            title="Refresh USDC Balance"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-purple-600 mt-1">Available to deposit</p>
-                    </div>
-
-                    {/* Treasury USDC Balance */}
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                          <span className="text-sm font-medium text-indigo-700">Treasury USDC:</span>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-semibold text-indigo-900">
-                            {isLoadingUsdcTreasuryBalance ? (
-                              <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin"></div>
-                            ) : (
-                              `${usdcTreasuryBalance.toFixed(2)} USDC`
-                            )}
-                          </span>
-                          <button
-                            onClick={fetchUSDCTreasuryBalance}
-                            disabled={isLoadingUsdcTreasuryBalance}
-                            className="p-1 text-indigo-500 hover:text-indigo-700 disabled:opacity-50"
-                            title="Refresh USDC Treasury Balance"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-indigo-600 mt-1">Available for payroll</p>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Deposit Amount Input */}
-              <div className="mb-6">
-                {activeDepositTab === 'apt' ? (
-                  <>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Deposit Amount (APT)</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                        </svg>
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={userBalance}
-                        value={depositAmount}
-                        onChange={(e) => setDepositAmount(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter amount to deposit"
-                        disabled={isDepositing}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Enter amount in APT (e.g., 1.5 for 1.5 APT)</p>
-                  </>
-                ) : (
-                  <>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Deposit Amount (USDC)</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                        </svg>
-                      </div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max={usdcBalance}
-                        value={usdcDepositAmount}
-                        onChange={(e) => setUsdcDepositAmount(e.target.value)}
-                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Enter amount to deposit"
-                        disabled={isDepositingUsdc}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Enter amount in USDC (e.g., 100 for 100 USDC)</p>
-                    {/* Simple preview from sender's perspective */}
-                    {(() => {
-                      const amount = Number(usdcDepositAmount);
-                      if (!isNaN(amount) && amount > 0) {
-                        return (
-                          <div className="mt-4 rounded-lg border border-purple-200 bg-purple-50 p-3">
-                            <div className="text-xs font-medium text-purple-900 mb-2">Preview (from your perspective)</div>
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-gray-700">Your USDC</span>
-                              <span className="font-semibold text-red-600">-{amount.toFixed(2)} USDC</span>
-                            </div>
-                            <div className="flex items-center justify-between text-sm mt-1">
-                              <span className="text-gray-700">Treasury USDC</span>
-                              <span className="font-semibold text-green-600">+{amount.toFixed(2)} USDC</span>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </>
-                )}
-              </div>
-
-              {/* Error/Success Messages */}
-              {activeDepositTab === 'apt' ? (
-                <>
-                  {depositError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-sm text-red-800">{depositError}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {depositSuccess && (
-                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-sm text-green-800">{depositSuccess}</span>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  {usdcDepositError && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-sm text-red-800">{usdcDepositError}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {usdcDepositSuccess && (
-                    <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
-                      <div className="flex items-center">
-                        <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span className="text-sm text-green-800">{usdcDepositSuccess}</span>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Quick Amount Buttons */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Quick Amounts</label>
-                <div className="grid grid-cols-4 gap-2">
+              {/* Balance Row */}
+              <div className="flex items-center justify-between text-xs bg-secondary/20 border border-border rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
                   {activeDepositTab === 'apt' ? (
-                    [0.1, 0.5, 1.0, 2.0].map((amount) => (
-                      <button
-                        key={amount}
-                        onClick={() => setDepositAmount(amount.toString())}
-                        disabled={isDepositing || amount > userBalance}
-                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {amount} APT
-                      </button>
-                    ))
+                    <Image src="/icons/apt.png" alt="APT" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
                   ) : (
-                    [10, 50, 100, 200].map((amount) => (
-                      <button
-                        key={amount}
-                        onClick={() => setUsdcDepositAmount(amount.toString())}
-                        disabled={isDepositingUsdc || amount > usdcBalance}
-                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {amount} USDC
-                      </button>
-                    ))
+                    <Image src="/icons/usdc.png" alt="USDC" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
                   )}
+                  <span className="text-foreground">Balance:</span>
+                      </div>
+                <span className="font-semibold text-foreground">
+                  {activeDepositTab === 'apt'
+                    ? (isLoadingUserBalance ? '—' : `${userBalance.toFixed(4)} APT`)
+                    : (isLoadingUsdcBalance ? '—' : `${usdcBalance.toFixed(2)} USDC`)
+                  }
+                          </span>
+                    </div>
+
+              {/* Amount Input */}
+                <div>
+                <label className="block text-xs font-medium text-foreground mb-1">
+                  {activeDepositTab === 'apt' ? 'Amount in APT' : 'Amount in USDC'}
+                </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                    {activeDepositTab === 'apt' ? (
+                      <Image src="/icons/apt.png" alt="APT" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+                    ) : (
+                      <Image src="/icons/usdc.png" alt="USDC" width={14} height={14} className="w-3.5 h-3.5 object-contain" />
+                    )}
+                      </div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                    value={activeDepositTab === 'apt' ? depositAmount : usdcDepositAmount}
+                    onChange={(e) => activeDepositTab === 'apt' ? setDepositAmount(e.target.value) : setUsdcDepositAmount(e.target.value)}
+                    className="block w-full pl-8 pr-16 py-2 bg-secondary/20 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-foreground text-sm"
+                    placeholder={activeDepositTab === 'apt' ? '0.00' : '0.00'}
+                    disabled={activeDepositTab === 'apt' ? isDepositing : isDepositingUsdc}
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+                    <span className="text-[10px] font-semibold bg-secondary/30 border border-border rounded-md px-2 py-1">
+                      {activeDepositTab === 'apt' ? 'APT' : 'USDC'}
+                    </span>
+                    </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Based on your wallet balance</p>
               </div>
 
-              {/* Contract Info */}
-              <div className={`border rounded-lg p-4 ${
-                activeDepositTab === 'apt' 
-                  ? 'bg-blue-50 border-blue-200' 
-                  : 'bg-purple-50 border-purple-200'
-              }`}>
-                <div className="flex items-start space-x-3">
-                  <svg className={`w-5 h-5 mt-0.5 ${
-                    activeDepositTab === 'apt' ? 'text-blue-600' : 'text-purple-600'
-                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <h5 className={`text-sm font-medium mb-1 ${
-                      activeDepositTab === 'apt' ? 'text-blue-900' : 'text-purple-900'
-                    }`}>
-                      Smart Contract Deposit
-                    </h5>
-                    <p className={`text-xs ${
-                      activeDepositTab === 'apt' ? 'text-blue-800' : 'text-purple-800'
-                    }`}>
-                      {activeDepositTab === 'apt' 
-                        ? "This deposit uses the contract's deposit_apt function to securely transfer APT tokens to the treasury for payroll operations."
-                        : "This deposit uses the contract's deposit_usdc function to securely transfer USDC tokens to the treasury for payroll operations."
-                      }
-                    </p>
-                  </div>
-                </div>
+              {/* Treasury Row */}
+              <div className="flex items-center justify-between text-xs bg-secondary/20 border border-border rounded-lg px-3 py-2">
+                <span className="text-foreground">Current Treasury:</span>
+                <span className="font-semibold text-foreground">
+                  {activeDepositTab === 'apt'
+                    ? (isLoadingBalance ? '—' : `${balance.toFixed(4)} APT`)
+                    : (isLoadingUsdcTreasuryBalance ? '—' : `${usdcTreasuryBalance.toFixed(2)} USDC`)
+                  }
+                </span>
               </div>
-            </div>
 
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end space-x-3 px-6 py-4 bg-gray-50 rounded-b-lg">
-              <button
-                onClick={handleCloseDepositModal}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Cancel
-              </button>
+              {/* Error/Success */}
+              {activeDepositTab === 'apt' ? (
+                <>
+                  {depositError && <div className="text-[11px] text-red-500 bg-red-500/10 border border-red-500/30 rounded-md px-2 py-1">{depositError}</div>}
+                  {depositSuccess && <div className="text-[11px] text-green-500 bg-green-500/10 border border-green-500/30 rounded-md px-2 py-1">{depositSuccess}</div>}
+                </>
+              ) : (
+                <>
+                  {usdcDepositError && <div className="text-[11px] text-red-500 bg-red-500/10 border border-red-500/30 rounded-md px-2 py-1">{usdcDepositError}</div>}
+                  {usdcDepositSuccess && <div className="text-[11px] text-green-500 bg-green-500/10 border border-green-500/30 rounded-md px-2 py-1">{usdcDepositSuccess}</div>}
+                </>
+              )}
+
+              {/* Footer Button */}
+              <div className="pt-1">
               {activeDepositTab === 'apt' ? (
                 <button
                   onClick={handleDeposit}
                   disabled={isDepositing || !depositAmount || parseFloat(depositAmount) <= 0 || parseFloat(depositAmount) > userBalance}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isDepositing ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Depositing...</span>
-                    </div>
-                  ) : (
-                    'Deposit APT'
-                  )}
+                    className="w-full btn-primary px-4 py-2 text-xs font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDepositing ? 'Depositing…' : 'Deposit APT'}
                 </button>
               ) : (
                 <button
                   onClick={handleUSDCDeposit}
                   disabled={isDepositingUsdc || !usdcDepositAmount || parseFloat(usdcDepositAmount) <= 0 || parseFloat(usdcDepositAmount) > usdcBalance}
-                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isDepositingUsdc ? (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Depositing...</span>
-                    </div>
-                  ) : (
-                    'Deposit USDC'
-                  )}
+                    className="w-full btn-primary px-4 py-2 text-xs font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDepositingUsdc ? 'Depositing…' : 'Deposit USDC'}
                 </button>
               )}
+                <p className="mt-2 text-[10px] text-muted-foreground text-center">Funds are available immediately in your treasury</p>
+              </div>
             </div>
           </div>
         </div>

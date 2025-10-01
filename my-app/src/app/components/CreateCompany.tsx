@@ -98,7 +98,7 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
 
       // Build transaction payload - pass strings directly
       const transaction = {
-        sender: account.address,
+        sender: typeof account.address === 'string' ? account.address : account.address.toString(),
         data: {
           function: `${contractAddress}::paylance_v12::create_company`,
           functionArguments: [companyName, companyEmail, registryAddress],
@@ -107,13 +107,20 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
 
       console.log('Transaction payload:', transaction);
 
-      const result = await signAndSubmitTransaction(transaction);
+      const result = await signAndSubmitTransaction(transaction as any);
       setTxnHash(result.hash);
       console.log('Company created successfully:', result.hash);
 
+      // Dispatch event to notify navbar of company creation
+      try {
+        window.dispatchEvent(new Event('company:created'));
+      } catch (e) {
+        console.log('Could not dispatch company:created event:', e);
+      }
+
       // Wait a moment for the transaction to be processed, then redirect
       setTimeout(() => {
-        router.push('/employees');
+        router.push('/dashboard');
       }, 2000);
 
     } catch (err: any) {
@@ -137,94 +144,68 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+    <div className="max-w-3xl mx-auto px-3">
+      <div className="rounded-2xl border  border-border overflow-hidden bg-secondary/10">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-blue-600 px-8 py-6">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="px-6 py-5 border-b border-border bg-secondary/10">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-primary/20 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">Create Company</h2>
-              <p className="text-green-100">Set up your payroll company on Aptos</p>
+              <h2 className="text-xl md:text-2xl font-bold text-foreground">Create Company</h2>
+              <p className="text-sm text-muted-foreground">Set up your payroll company on Aptos</p>
             </div>
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-8">
-          {/* Wallet Connection Status */}
-          <div className="bg-gray-50 rounded-xl p-6 mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Wallet Status</p>
-                <p className="text-lg font-semibold text-gray-900">
-                  {account?.address ? 'Connected' : 'Not Connected'}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {account?.address ? 
-                    `Address: ${formatAddress(account.address)}` : 
-                    'Please connect your wallet to create a company'
-                  }
-                </p>
-              </div>
-              {account?.address && (
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              )}
-            </div>
-          </div>
+        <div className="p-6 md:p-8">
+         
 
           {/* Company Information */}
           <div className="space-y-6">
-            {isCheckingCompany ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="flex items-center space-x-2">
-                  <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-gray-600">Checking for existing company...</span>
-                </div>
-              </div>
-            ) : existingCompany ? (
+            {isCheckingCompany ? null : existingCompany ? (
               /* Existing Company Display */
-              <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-6">
                 <div className="flex items-center space-x-2 mb-4">
                   <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <h3 className="text-lg font-semibold text-green-800">Company Already Created</h3>
+                  <h3 className="text-lg font-semibold text-green-500">Company Already Created</h3>
                 </div>
                 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-green-700 mb-1">Company Name</label>
-                    <p className="text-green-800 font-medium">{existingCompany.company_name}</p>
+                    <label className="block text-sm font-medium text-green-500 mb-1">Company Name</label>
+                    <p className="text-foreground font-medium">{existingCompany.company_name}</p>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-green-700 mb-1">Company Email</label>
-                    <p className="text-green-800 font-medium">{existingCompany.company_email}</p>
+                    <label className="block text-sm font-medium text-green-500 mb-1">Company Email</label>
+                    <p className="text-foreground font-medium">{existingCompany.company_email}</p>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-green-700 mb-1">Admin Address</label>
-                    <p className="text-green-800 font-mono text-sm">{formatAddress(existingCompany.admin)}</p>
+                    <label className="block text-sm font-medium text-green-500 mb-1">Admin Address</label>
+                    <p className="text-foreground font-mono text-sm">{formatAddress(existingCompany.admin)}</p>
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-green-700 mb-1">Company Status</label>
+                    <label className="block text-sm font-medium text-green-500 mb-1">Company Status</label>
                     <div className="flex items-center space-x-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span className="text-green-800">Active</span>
+                      <span className="text-foreground">Active</span>
                     </div>
                   </div>
                 </div>
                 
-                <div className="mt-4 pt-4 border-t border-green-200">
+                <div className="mt-4 pt-4 border-t border-green-500/20">
                   <button
                     onClick={checkExistingCompany}
-                    className="text-green-600 hover:text-green-800 text-sm font-medium underline"
+                    className="text-green-500 hover:text-green-400 text-sm font-medium underline"
                   >
                     Refresh Company Data
                   </button>
@@ -235,7 +216,7 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
               <>
                 {/* Company Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Company Name *
                   </label>
                   <input
@@ -243,13 +224,13 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="Enter your company name"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                    className="w-full px-4 py-3 bg-secondary/10 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-foreground"
                   />
                 </div>
 
                 {/* Company Email */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-foreground mb-2">
                     Company Email *
                   </label>
                   <input
@@ -257,21 +238,21 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
                     value={companyEmail}
                     onChange={(e) => setCompanyEmail(e.target.value)}
                     placeholder="Enter your company email"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                    className="w-full px-4 py-3 bg-secondary/10 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-foreground"
                   />
                 </div>
               </>
             )}
 
             {/* Registry Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
               <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                  <p className="text-blue-700 text-sm font-medium">Registry Address</p>
-                  <p className="text-blue-600 text-xs">
+                  <p className="text-foreground text-sm font-medium">Registry Address</p>
+                  <p className="text-muted-foreground text-xs">
                     Using contract address as registry: {formatAddress(registryAddress)}
                   </p>
                 </div>
@@ -280,30 +261,30 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
 
             {/* Error Display */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
                 <div className="flex items-center space-x-2">
                   <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-red-700 text-sm">{error}</p>
+                  <p className="text-red-500 text-sm">{error}</p>
                 </div>
               </div>
             )}
 
             {/* Success Display */}
             {txnHash && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
                 <div className="flex items-center space-x-2">
                   <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <div>
-                    <p className="text-green-700 text-sm font-medium">Company Created Successfully!</p>
+                    <p className="text-green-500 text-sm font-medium">Company Created Successfully!</p>
                     <a
                       href={`https://explorer.aptoslabs.com/txn/${txnHash}?network=testnet`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-green-600 text-xs hover:underline"
+                      className="text-green-400 text-xs hover:underline"
                     >
                       View on Explorer: {truncateHash(txnHash)}
                     </a>
@@ -315,29 +296,21 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
             {/* Create Company Button - Only show if no existing company */}
             {!existingCompany && !isCheckingCompany && (
               <button
-                onClick={handleCreateCompany}
-                disabled={isLoading || !account?.address || !companyName || !companyEmail}
-                className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-200 transform hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center space-x-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Creating Company...</span>
-                  </div>
-                ) : (
-                  'Create Company'
-                )}
-              </button>
+              onClick={handleCreateCompany}
+              disabled={isLoading || !account?.address || !companyName || !companyEmail}
+              className="w-50 btn-primary py-3 rounded-lg font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed block mx-auto"
+            >
+              {isLoading ? (
+                <span>Creating Company...</span>
+              ) : (
+                'Create Company'
+              )}
+            </button>
+            
             )}
           </div>
 
-          {/* Contract Info */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>Contract Address:</span>
-              <span className="font-mono">{formatAddress(contractAddress)}</span>
-            </div>
-          </div>
+          
         </div>
       </div>
     </div>
