@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="./my-app/public/logo.png" alt="Aptos Paylance" width="96" />
+  <img src="./my-app/public/icons/logo.png" alt="Aptos Paylance" width="96" />
 
   <h1>Aptos Paylance</h1>
 
