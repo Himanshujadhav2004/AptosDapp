@@ -300,11 +300,6 @@ export const CreateCompany: React.FC<CreateCompanyProps> = ({ contractAddress })
               disabled={isLoading || !account?.address || !companyName || !companyEmail}
               className="w-50 btn-primary py-3 rounded-lg font-semibold text-base disabled:opacity-50 disabled:cursor-not-allowed block mx-auto"
             >
-              {isLoading ? (
-                <span>Creating Company...</span>
-              ) : (
-                'Create Company'
-              )}
             </button>
             
             )}

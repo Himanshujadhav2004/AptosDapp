@@ -492,7 +492,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
         </MagicCard>
 
         {/* 3) Token Payouts (Bar) */}
-        <MagicCard particles={false} className="bg-primary/[0.08]">
           <div className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">Token Payouts</h3>
@@ -511,7 +510,6 @@ export const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ contractAd
              
             </div>
           </div>
-        </MagicCard>
       </div>
 
       {/* Recent Activity Section */}

@@ -10,11 +10,6 @@ export function cn(...inputs: ClassValue[]) {
       classes.push(input);
     } else if (Array.isArray(input)) {
       const result = cn(...input);
-      if (result) classes.push(result);
-    } else if (typeof input === 'object') {
-      for (const [key, value] of Object.entries(input)) {
-        if (value) classes.push(key);
-      }
     }
   }
   

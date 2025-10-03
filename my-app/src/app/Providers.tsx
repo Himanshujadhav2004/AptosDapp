@@ -10,13 +10,7 @@ const queryClient = new QueryClient();
 
 export default function Providers({ children }: PropsWithChildren) {
   return (
-    <AptosWalletAdapterProvider
-      autoConnect={true}
-      onError={(error) => {
-        // Silently handle wallet errors to prevent crashes
-        console.warn('Wallet adapter error (handled):', error?.message || error);
-      }}
-    >
+    <AptosWalletAdapterProvider>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
           <AptosCoreProvider>{children}</AptosCoreProvider>

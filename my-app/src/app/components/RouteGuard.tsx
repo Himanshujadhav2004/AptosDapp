@@ -45,14 +45,7 @@ export const RouteGuard: React.FC<RouteGuardProps> = ({
     return null;
   }
 
-  // Don't render if requirements not met
-  if (requireWallet && !connected) {
-    return null;
-  }
 
-  if (requireCompany && !hasCompany && connected) {
-    return null;
-  }
 
   return <>{children}</>;
 };

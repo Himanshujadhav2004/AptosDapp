@@ -5,7 +5,6 @@ import { Background, Wrapper } from '../components/global';
 import { Particles } from '../components/ui/Particles';
 import Container from '../components/global/Container';
 
-const CONTRACT_ADDRESS = '0x8922d3e9d9b5ea2175ac47c083d1b5b83af560113481d02b03d143552d14f994';
 
 export default function EmployeesPage() {
   return (

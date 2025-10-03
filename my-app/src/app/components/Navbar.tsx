@@ -464,17 +464,6 @@ export const Navbar = () => {
     }
   }, [connected, account?.address]);
 
-  // Listen for external refresh requests (e.g., from PayrollManagement after payments)
-  useEffect(() => {
-    const onRefresh = () => {
-      if (connected && account?.address) {
-        fetchTreasuryBalance();
-        fetchUSDCTreasuryBalance();
-      }
-    };
-    window.addEventListener('treasury:refresh', onRefresh);
-    return () => window.removeEventListener('treasury:refresh', onRefresh);
-  }, [connected, account?.address]);
 
   // Listen for company creation events to refresh company status
   useEffect(() => {
@@ -487,17 +476,6 @@ export const Navbar = () => {
     return () => window.removeEventListener('company:created', onCompanyCreated);
   }, []);
 
-  // Handle mobile menu overflow
-  useEffect(() => {
-    if (isMobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isMobileMenuOpen]);
 
   return (
     <>
