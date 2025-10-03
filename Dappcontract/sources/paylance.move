@@ -125,18 +125,13 @@ module paylance_addr::paylance_v12 {
         let admin_addr = signer::address_of(admin);
         
         // Check if company already exists under this admin
-        assert!(!exists<Company>(admin_addr), ECOMPANY_ALREADY_EXISTS);
+     
         
         // Check in global registry if admin already has a company
         if (exists<CompanyRegistry>(registry_address)) {
             let registry = borrow_global<CompanyRegistry>(registry_address);
             let mapping_len = vector::length(&registry.admin_to_company);
-            let i = 0;
-            while (i < mapping_len) {
-                let mapping = vector::borrow(&registry.admin_to_company, i);
-                assert!(mapping.admin != admin_addr, ECOMPANY_ALREADY_EXISTS);
-                i = i + 1;
-            };
+         
         };
 
         // Create a secondary USDC store owned by a company-owned object (treasury)
@@ -272,12 +267,7 @@ module paylance_addr::paylance_v12 {
     public entry fun update_employee_complete(
         admin: &signer,
         employee_wallet: address,
-        new_name: String,
-        new_email: String,
-        new_role: String,
-        new_salary: u64,
-        new_wallet: address,
-        new_paused: bool,
+   
     ) acquires Company {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
@@ -343,11 +333,7 @@ module paylance_addr::paylance_v12 {
     public entry fun resume_payroll(admin: &signer) acquires Company {
         let admin_addr = signer::address_of(admin);
         assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
-        
-        let company = borrow_global_mut<Company>(admin_addr);
-        assert!(company.admin == admin_addr, ENOT_ADMIN);
-        
-        company.payroll_paused = false;
+     
         
         event::emit_event(&mut company.payroll_resumed_events, PayrollResumedEvent {
             timestamp: timestamp::now_microseconds(),
@@ -374,17 +360,7 @@ module paylance_addr::paylance_v12 {
         amount: u64,
     ) acquires Company {
         let admin_addr = signer::address_of(admin);
-        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
-        assert!(amount > 0, EINVALID_AMOUNT);
 
-        let company = borrow_global_mut<Company>(admin_addr);
-        assert!(company.admin == admin_addr, ENOT_ADMIN);
-
-        // Get USDC metadata object
-        let usdc_metadata = object::address_to_object<Metadata>(USDC_METADATA_ADDRESS);
-
-        // Check admin has sufficient USDC balance in their primary store
-        let admin_balance = primary_fungible_store::balance(admin_addr, usdc_metadata);
         assert!(admin_balance >= amount, EINSUFFICIENT_USDC_BALANCE);
 
         // Withdraw from admin primary store and deposit into company USDC store
@@ -481,14 +457,7 @@ module paylance_addr::paylance_v12 {
             if (emp.wallet == employee_wallet) {
                 assert!(!emp.paused, EEMPLOYEE_PAUSED);
                 
-                // Ensure company USDC store has sufficient balance
-                let store_balance = fungible_asset::balance(company.usdc_store);
-                assert!(store_balance >= emp.salary_usdc, EINSUFFICIENT_USDC_BALANCE);
 
-                // Withdraw from company store (using store owner signer) and deposit to employee primary store
-                let store_signer = object::generate_signer_for_extending(&company.usdc_store_extend_ref);
-                let fa_to_pay: FungibleAsset = dispatchable_fungible_asset::withdraw(&store_signer, company.usdc_store, emp.salary_usdc);
-                primary_fungible_store::deposit(employee_wallet, fa_to_pay);
                 
                 // Update employee record
                 emp.last_paid = timestamp::now_microseconds();
@@ -529,12 +498,7 @@ module paylance_addr::paylance_v12 {
     public entry fun pay_single_employee_apt(
         admin: &signer,
         employee_wallet: address,
-    ) acquires Company, Treasury {
-        let admin_addr = signer::address_of(admin);
-        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
-        
-        let company = borrow_global_mut<Company>(admin_addr);
-        assert!(company.admin == admin_addr, ENOT_ADMIN);
+
         assert!(!company.payroll_paused, EPAYROLL_PAUSED);
 
         // Find employee
@@ -567,10 +531,7 @@ module paylance_addr::paylance_v12 {
                     timestamp: timestamp::now_microseconds(),
                     amount: apt_amount,
                     employee_name: emp.name,
-                    employee_role: emp.role,
-                    employee_email: emp.email,
-                    employee_wallet: emp.wallet,
-                    token_type: string::utf8(b"APT"),
+                    employee_r
                     usdc_amount: emp.salary_usdc,
                     apt_amount: apt_amount,
                 };
@@ -595,11 +556,7 @@ module paylance_addr::paylance_v12 {
 
     // Fixed bulk USDC payment function
     public entry fun pay_all_employees_usdc(admin: &signer) acquires Company {
-        let admin_addr = signer::address_of(admin);
-        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
-        
-        let company = borrow_global_mut<Company>(admin_addr);
-        assert!(company.admin == admin_addr, ENOT_ADMIN);
+
         assert!(!company.payroll_paused, EPAYROLL_PAUSED);
 
         // Calculate total USDC payroll
@@ -633,13 +590,7 @@ module paylance_addr::paylance_v12 {
                 
                 let payment_log = PaymentLog {
                     timestamp: timestamp::now_microseconds(),
-                    amount: emp.salary_usdc,
-                    employee_name: emp.name,
-                    employee_role: emp.role,
-                    employee_email: emp.email,
-                    employee_wallet: emp.wallet,
-                    token_type: string::utf8(b"USDC"),
-                    usdc_amount: emp.salary_usdc,
+
                     apt_amount: 0,
                 };
                 vector::push_back(&mut company.all_payments, payment_log);
@@ -659,11 +610,7 @@ module paylance_addr::paylance_v12 {
     // Bulk payment functions - Pay all employees in APT (converted from USDC)
     public entry fun pay_all_employees_apt(admin: &signer) acquires Company, Treasury {
         let admin_addr = signer::address_of(admin);
-        assert!(exists<Company>(admin_addr), ECOMPANY_NOT_INITIALIZED);
-        
-        let company = borrow_global_mut<Company>(admin_addr);
-        assert!(company.admin == admin_addr, ENOT_ADMIN);
-        assert!(!company.payroll_paused, EPAYROLL_PAUSED);
+
 
         // Calculate total APT payroll (converted from USDC salaries)
         let total_apt_payroll = 0;
@@ -698,13 +645,7 @@ module paylance_addr::paylance_v12 {
                 let payment_log = PaymentLog {
                     timestamp: timestamp::now_microseconds(),
                     amount: apt_amount,
-                    employee_name: emp.name,
-                    employee_role: emp.role,
-                    employee_email: emp.email,
-                    employee_wallet: emp.wallet,
-                    token_type: string::utf8(b"APT"),
-                    usdc_amount: emp.salary_usdc,
-                    apt_amount: apt_amount,
+  
                 };
                 vector::push_back(&mut company.all_payments, payment_log);
                 
@@ -732,15 +673,13 @@ module paylance_addr::paylance_v12 {
 
     #[view]
     public fun get_all_employees(company_address: address): vector<Employee> acquires Company {
-        assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
-        let company = borrow_global<Company>(company_address);
+
         company.employees
     }
 
     #[view]
     public fun get_employee(company_address: address, employee_wallet: address): Employee acquires Company {
-        assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
-        let company = borrow_global<Company>(company_address);
+   
         
         let len = vector::length(&company.employees);
         let i = 0;
@@ -764,10 +703,7 @@ module paylance_addr::paylance_v12 {
     // USDC treasury balance view function from the company's secondary store
     #[view]
     public fun get_usdc_treasury_balance(company_address: address): u64 acquires Company {
-        assert!(exists<Company>(company_address), ECOMPANY_NOT_INITIALIZED);
-        let company = borrow_global<Company>(company_address);
-        // For dispatchable assets, the balance API is the same
-        fungible_asset::balance(company.usdc_store)
+
     }
 
     // Public view function to get a reasonable APT price estimate (8 decimal places)
@@ -846,19 +782,7 @@ module paylance_addr::paylance_v12 {
         let i = 0;
         while (i < mapping_len) {
             let mapping = vector::borrow(&registry.admin_to_company, i);
-            if (mapping.admin == admin_address) {
-                // Find the company info
-                let company_len = vector::length(&registry.companies);
-                let j = 0;
-                while (j < company_len) {
-                    let company_info = vector::borrow(&registry.companies, j);
-                    if (company_info.company_address == mapping.company_address) {
-                        return option::some(*company_info)
-                    };
-                    j = j + 1;
-                };
-            };
-            i = i + 1;
+        
         };
         option::none<CompanyInfo>()
     }
