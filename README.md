@@ -4,7 +4,7 @@
 
   <h1>Aptos Paylance</h1>
 
-  <p><strong>Decentralized payroll on Aptos</strong> — bulk and P2P payments in native APT and USDT using Move smart contracts.</p>
+  <p><strong>Decentralized payroll on Aptos</strong> — bulk and P2P payments in native APT and USDC using Move smart contracts.</p>
 
   <p>
     <a href="https://nextjs.org/">Next.js</a> •
@@ -32,7 +32,7 @@
 - Frontend: Next.js 15, React 19, TailwindCSS (see `my-app/`)
 - Wallet & Contracts: Aptos Move, Aptos TypeScript SDK
 - Chain: Aptos (Testnet)
-- Tokens: APT (native), USDT (fungible token on Aptos)
+- Tokens: APT (native), USDC (fungible token on Aptos)
 
 ## 🏗️ Architecture
 
@@ -64,7 +64,7 @@ flowchart TB
   M2a[Add · Edit · Delete Employee]:::node
   M2 --> M2a
 
-  M3a[Pay with APT & USDT]:::node
+  M3a[Pay with APT & USDC]:::node
   M3b[Bulk Pay or P2P Transfer]:::node
   M3 --> M3a
   M3 --> M3b
@@ -102,7 +102,7 @@ flowchart TB
   classDef hub fill:#0f172a,stroke:#22c55e,color:#e5e7eb,rx:8,ry:8;
 ```
 
-> Infra notes: Under the hood we use Aptos Move for contracts, Aptos TypeScript SDK for transactions and wallet interactions, and optional USDT as a fungible token payout on Aptos.
+> Infra notes: Under the hood we use Aptos Move for contracts, Aptos TypeScript SDK for transactions and wallet interactions, and optional USDC as a fungible token payout on Aptos.
 
 ### Flow
 
@@ -186,7 +186,7 @@ Contracts are deployed with the Aptos CLI using `aptos move publish` from `Dappc
 
 Contracts live in `AptosDapp/Dappcontract/`:
 
-- `sources/paylance.move` — stores employees, salaries and executes payments in APT/USDT
+- `sources/paylance.move` — stores employees, salaries and executes payments in APT/USDC
 - `scripts/*.move` — helpers for setup, deploy and payroll execution
 - `ChainlinkDataFeeds/` and `ChainlinkPlatform/` — example integrations for data feeds and helper storage
 
@@ -195,7 +195,7 @@ The app interacts with these modules using the Aptos TypeScript SDK from the fro
 ## 📸 Screens (high level)
 
 - Dashboard: KPIs, employee table, responsive actions
-- Aptos Pay: token select (APT/USDT), recipients list, amount overrides, bulk/P2P
+- Aptos Pay: token select (APT/USDC), recipients list, amount overrides, bulk/P2P
 - Analysis: recent activity with search/filter/pagination
 
 ## 🤝 Contributing
