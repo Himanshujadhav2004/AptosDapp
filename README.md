@@ -23,7 +23,7 @@
 - **Add, edit, pause employees** with roles, email and salary
 - **Bulk payroll**: pay multiple recipients in a single transaction
 - **P2P transfer**: quick one-off payment to a single employee
-- **Multi-token support**: APT (native) or USDT (fungible token)
+- **Multi-token support**: APT (native) or USDC (fungible token)
 - **Recent activity**: on-chain payments with search, filter and pagination
 - **Production-ready**: responsive UI, Next.js App Router, Vercel deploy
 
