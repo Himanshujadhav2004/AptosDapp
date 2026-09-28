@@ -1,4 +1,4 @@
-```tsx
+tsx
 "use client";
 
 import { FOOTER_LINKS } from "@/app/constants/footerLinks";
